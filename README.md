@@ -284,7 +284,7 @@ logread | grep xray | tail -10
 ## Протестировано на
 
 - **Podkop**: v0.7.12
-- **LuCI App**: v0.7.9 - v0.7.10
+- **LuCI App**: v0.7.12
 - **OpenWrt**: 24.10.4 - 24.10.5
 - **Xray**: 25.1.30
 
