@@ -16,6 +16,7 @@ function createSectionContent(section) {
   o.value("proxy", "Proxy");
   o.value("vpn", "VPN");
   o.value("block", "Block");
+  o.value("exclusion", "Exclusion");
 
   o = section.option(
     form.ListValue,
@@ -23,10 +24,10 @@ function createSectionContent(section) {
     _("Configuration Type"),
     _("Select how to configure the proxy"),
   );
-
   o.value("url", _("Connection URL"));
-  o.value("outbound", _("Outbound Config"));
+  o.value("selector", _("Selector"));
   o.value("urltest", _("URLTest"));
+  o.value("outbound", _("Outbound Config"));
   o.default = "url";
   o.depends("connection_type", "proxy");
 
@@ -34,7 +35,7 @@ function createSectionContent(section) {
     form.TextValue,
     "proxy_string",
     _("Proxy Configuration URL"),
-    "",
+    _("vless://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links")
   );
   o.depends("proxy_config_type", "url");
   o.rows = 5;
@@ -44,7 +45,6 @@ function createSectionContent(section) {
   o.textarea = true;
   o.rmempty = false;
   o.sectionDescriptions = new Map();
-  o.placeholder = "vless://uuid@server:port?type=tcp&security=tls#main";
   o.validate = function (section_id, value) {
     // Optional
     if (!value || value.length === 0) {
@@ -89,11 +89,34 @@ function createSectionContent(section) {
 
   o = section.option(
     form.DynamicList,
+    "selector_proxy_links",
+    _("Selector Proxy Links"),
+    _("vless://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links")
+  );
+  o.depends("proxy_config_type", "selector");
+  o.rmempty = false;
+  o.validate = function (section_id, value) {
+    // Optional
+    if (!value || value.length === 0) {
+      return true;
+    }
+
+    const validation = main.validateProxyUrl(value);
+
+    if (validation.valid) {
+      return true;
+    }
+
+    return validation.message;
+  };
+
+  o = section.option(
+    form.DynamicList,
     "urltest_proxy_links",
     _("URLTest Proxy Links"),
+    _("vless://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links")
   );
   o.depends("proxy_config_type", "urltest");
-  o.placeholder = "vless://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links";
   o.rmempty = false;
   o.validate = function (section_id, value) {
     // Optional
@@ -624,6 +647,8 @@ function createSectionContent(section) {
   );
   o.placeholder = "192.168.1.2 or 192.168.1.0/24";
   o.rmempty = true;
+  o.depends("connection_type", "proxy");
+  o.depends("connection_type", "vpn");
   o.validate = function (section_id, value) {
     // Optional
     if (!value || value.length === 0) {
@@ -649,6 +674,8 @@ function createSectionContent(section) {
   );
   o.default = "0";
   o.rmempty = false;
+  o.depends("connection_type", "proxy");
+  o.depends("connection_type", "vpn");
 
   o = section.option(
     form.Value,
