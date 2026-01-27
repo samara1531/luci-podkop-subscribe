@@ -396,6 +396,10 @@ JSONEOF
 
 # Save to file
 if cp "$tmp_json" "$XRAY_CONFIG" 2>/dev/null; then
+    # Save the original vless URL to track current outbound connection
+    CURRENT_OUTBOUND_FILE="/tmp/podkop-xray-current-outbound"
+    echo "vless://$vless_url" > "$CURRENT_OUTBOUND_FILE" 2>/dev/null || true
+    
     # Restart xray service
     if /etc/init.d/xray restart >/dev/null 2>&1; then
         json_init

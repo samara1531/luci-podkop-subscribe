@@ -481,13 +481,6 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
     configList._selectorSelected = [];
   }
 
-  // Get current selected config for highlighting
-  var currentConfigUrl = null;
-  if (!isUrltest && !isSelector) {
-    var mode = isOutbound ? "outbound" : "url";
-    currentConfigUrl = getCurrentConfigUrl(section_id, mode);
-  }
-  
   // For urltest/selector, get selected URLs from DynamicList
   var selectedUrls = [];
   if (isUrltest || isSelector) {
@@ -501,7 +494,9 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
     });
   }
 
-  configs.forEach(function (config, index) {
+  // Function to render configs with current URL highlighting
+  var renderConfigs = function(currentConfigUrl) {
+    configs.forEach(function (config, index) {
     var configItem = document.createElement("div");
     configItem.className = "podkop-subscribe-item";
 
@@ -574,16 +569,28 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
       configItem.onclick = createUrlClickHandler(config, configItem, configList, section_id, isXhttp);
     }
 
-    configList.appendChild(configItem);
-  });
-  
-  // Update counter for urltest/selector with pre-selected count
-  if (isUrltest || isSelector) {
-    var counterIdSuffix = isSelector ? "selector" : "urltest";
-    var counter = document.getElementById("podkop-subscribe-" + counterIdSuffix + "-counter-" + section_id);
-    if (counter) {
-      counter.textContent = _("Выбрано: ") + selectedUrls.length;
+      configList.appendChild(configItem);
+    });
+    
+    // Update counter for urltest/selector with pre-selected count
+    if (isUrltest || isSelector) {
+      var counterIdSuffix = isSelector ? "selector" : "urltest";
+      var counter = document.getElementById("podkop-subscribe-" + counterIdSuffix + "-counter-" + section_id);
+      if (counter) {
+        counter.textContent = _("Выбрано: ") + selectedUrls.length;
+      }
     }
+  };
+
+  // Get current selected config for highlighting and render
+  if (!isUrltest && !isSelector) {
+    var mode = isOutbound ? "outbound" : "url";
+    getCurrentConfigUrl(section_id, mode, function(currentUrl) {
+      renderConfigs(currentUrl);
+    });
+  } else {
+    // For urltest/selector, render immediately
+    renderConfigs(null);
   }
 
   contentContainer.appendChild(configList);
@@ -1112,21 +1119,44 @@ function loadConfigsFromCache(section_id, mode, callback) {
 }
 
 // Get currently selected config URL
-function getCurrentConfigUrl(section_id, mode) {
+function getCurrentConfigUrl(section_id, mode, callback) {
   if (mode === "url") {
     // For URL mode, get proxy_string value
     var proxyTextarea =
       document.getElementById("widget.cbid.podkop." + section_id + ".proxy_string") ||
       document.getElementById("cbid.podkop." + section_id + ".proxy_string");
-    return proxyTextarea ? proxyTextarea.value : null;
+    if (callback) {
+      callback(proxyTextarea ? proxyTextarea.value : null);
+    } else {
+      return proxyTextarea ? proxyTextarea.value : null;
+    }
   } else if (mode === "urltest" || mode === "selector") {
     // For urltest/selector, we'll highlight all selected items
+    if (callback) callback(null);
     return null;
   } else if (mode === "outbound") {
-    // For outbound, we don't have a direct way to know which was selected
-    return null;
+    // For outbound, fetch from CGI script
+    if (callback) {
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", "/cgi-bin/podkop-current-outbound", true);
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200 && xhr.responseText) {
+            callback(xhr.responseText.trim());
+          } else {
+            callback(null);
+          }
+        }
+      };
+      xhr.onerror = function() {
+        callback(null);
+      };
+      xhr.send();
+    } else {
+      return null;
+    }
   }
-  return null;
+  if (!callback) return null;
 }
 
 // Auto-load cached configs for a section

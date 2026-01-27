@@ -26,12 +26,18 @@
 sh <(wget -O - https://raw.githubusercontent.com/mr-Abdrahimov/luci-podkop-subscribe/main/install.sh)
 ```
 
+**Интерактивная установка:**
+- Скрипт спросит, нужно ли устанавливать Xray (для поддержки XHTTP в режиме Outbound)
+- Если выбрать "нет" (n), Xray не будет установлен
+- Режим Outbound Config будет недоступен без Xray
+- Все остальные режимы (Connection URL, URLTest, Selector) работают без Xray
+
 **Что устанавливается автоматически:**
 - ✅ luci-app-podkop-subscribe плагин
-- ✅ xray-core пакет
-- ✅ Xray init скрипт (`/etc/init.d/xray`)
-- ✅ Автозапуск службы Xray
 - ✅ Все необходимые CGI скрипты и файлы интерфейса
+- ⚙️ xray-core пакет (опционально, по выбору пользователя)
+- ⚙️ Xray init скрипт `/etc/init.d/xray` (если выбран Xray)
+- ⚙️ Автозапуск службы Xray (если выбран Xray)
 
 ## Удаление
 
@@ -47,7 +53,10 @@ sh <(wget -O - https://raw.githubusercontent.com/mr-Abdrahimov/luci-podkop-subsc
 - Получать конфигурации из Subscribe URL одним нажатием кнопки
 - Просматривать доступные конфигурации в удобном списке с указанием протокола
 - **Автоматически сохранять и восстанавливать список конфигураций** (не нужно повторно нажимать "Получить")
-- **Подсвечивать выбранные конфигурации** в списке доступных
+- **Подсвечивать активные подключения во всех режимах**:
+  - Connection URL: подсвечивается текущий выбранный прокси
+  - Outbound Config: подсвечивается конфигурация, применённая к Xray
+  - URLTest/Selector: подсвечиваются все выбранные конфигурации в группе
 - Выбирать и применять конфигурации к настройкам прокси Podkop или напрямую к Xray
 - Автоматически сохранять Subscribe URL в конфигурации (сохраняется при Save & Apply)
 - Использовать URLTest для автоматического выбора лучшего прокси
@@ -369,9 +378,14 @@ logread | grep xray | tail -20
 
 ### Автоматически устанавливаются через install.sh
 - ✅ wget (если не установлен)
-- ✅ xray-core
-- ✅ Xray init скрипт
 - ✅ Все файлы плагина (CGI скрипты, JS файлы, ACL конфигурация)
+
+### Опционально (устанавливается по выбору при установке)
+- ⚙️ xray-core
+- ⚙️ Xray init скрипт
+- ⚙️ Автозапуск службы Xray
+
+**Примечание:** Скрипт установки спросит, нужен ли вам Xray. Если вы не планируете использовать режим Outbound Config с XHTTP, можете отказаться от установки Xray.
 
 ### Встроенные в систему
 - base64 (обычно включен в BusyBox)
@@ -410,10 +424,14 @@ logread | grep xray | tail -20
   - Поддержка всех параметров VLESS (REALITY, XHTTP, WebSocket)
   - Валидация конфигурации
   - Автоматический перезапуск службы Xray
+  - Сохранение текущего применённого URL для подсветки
 - **/cgi-bin/podkop-configs-cache**:
   - Сохранение полученных конфигураций в кэш
   - Загрузка кэшированных конфигураций
   - Управление кэшем по секциям и режимам
+- **/cgi-bin/podkop-current-outbound**:
+  - Возврат URL текущего активного Outbound подключения
+  - Используется для подсветки активной конфигурации
 
 ### Хранилище данных
 - **Subscribe URL**: Сохраняется в `/etc/config/podkop` через UCI
@@ -422,6 +440,9 @@ logread | grep xray | tail -20
   - Кэш сохраняется после каждого получения конфигураций
   - Автоматически восстанавливается при загрузке страницы
   - Выбранные конфигурации подсвечиваются
+- **Текущее Outbound подключение**: Сохраняется в `/tmp/podkop-xray-current-outbound`
+  - Содержит URL последней применённой конфигурации к Xray
+  - Используется для подсветки активного подключения в режиме Outbound
 - **URLTest конфигурации**: Автоматически заполняют `urltest_proxy_links` DynamicList
 - **Selector конфигурации**: Автоматически заполняют `selector_proxy_links` DynamicList
 - **Xray конфигурация**: Сохраняется в `/etc/xray/config.json`
@@ -506,6 +527,16 @@ rm -rf /tmp/podkop-subscribe-cache/
 
 Или просто получите конфигурации заново - они перезапишут кэш.
 
+### Почему конфигурация не подсвечивается в режиме Outbound?
+
+Убедитесь, что вы применили конфигурацию через кнопку "Получить" → клик по конфигурации. Информация о текущем подключении сохраняется в `/tmp/podkop-xray-current-outbound` и очищается после перезагрузки роутера.
+
+### Как работает подсветка активных подключений?
+
+- **Connection URL**: Читает значение из поля `proxy_string` и подсвечивает соответствующую конфигурацию
+- **Outbound Config**: Читает сохранённый URL из `/tmp/podkop-xray-current-outbound`
+- **URLTest/Selector**: Читает выбранные конфигурации из DynamicList полей и подсвечивает все выбранные
+
 ### Что делать если конфигурация не применяется?
 
 1. Проверьте, что Podkop установлен: `opkg list-installed | grep podkop`
@@ -516,6 +547,51 @@ rm -rf /tmp/podkop-subscribe-cache/
 ### Можно ли использовать плагин без Xray?
 
 Да! Режимы Connection URL, URLTest и Selector работают без Xray. Только режим Outbound Config требует Xray.
+
+При установке скрипт спросит, нужен ли вам Xray. Если вы выберете "нет", плагин будет работать во всех режимах кроме Outbound Config.
+
+### Я отказался от установки Xray, как установить его позже?
+
+Вы можете установить Xray вручную:
+
+```bash
+# Установка xray-core
+opkg update
+opkg install xray-core
+
+# Создание init-скрипта
+cat > /etc/init.d/xray << 'EOF'
+#!/bin/sh /etc/rc.common
+START=99
+USE_PROCD=1
+PROG=/usr/bin/xray
+
+validate_config() {
+    $PROG -test -config /etc/xray/config.json >/dev/null 2>&1
+}
+
+start_service() {
+    validate_config || {
+        echo "Xray: неверная конфигурация"
+        return 1
+    }
+    procd_open_instance
+    procd_set_param command $PROG -config /etc/xray/config.json
+    procd_set_param respawn 60 5 5
+    procd_set_param user root
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_close_instance
+}
+EOF
+
+# Настройка прав и автозапуска
+chmod +x /etc/init.d/xray
+mkdir -p /etc/xray
+/etc/init.d/xray enable
+```
+
+Или просто запустите установку плагина заново - она обнаружит уже установленные компоненты.
 
 ### Как обновить плагин?
 

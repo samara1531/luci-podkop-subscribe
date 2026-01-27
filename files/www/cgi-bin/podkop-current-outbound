@@ -1,0 +1,15 @@
+#!/bin/sh
+# CGI script to get current outbound connection URL
+
+CURRENT_OUTBOUND_FILE="/tmp/podkop-xray-current-outbound"
+
+# Set content type
+echo "Content-Type: text/plain"
+echo ""
+
+if [ -f "$CURRENT_OUTBOUND_FILE" ]; then
+    cat "$CURRENT_OUTBOUND_FILE"
+else
+    # Return empty if file doesn't exist
+    echo ""
+fi

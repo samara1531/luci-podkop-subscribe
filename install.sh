@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installation script for luci-app-podkop-subscribe
+# Скрипт установки luci-app-podkop-subscribe
 
 set -e
 
@@ -7,174 +7,213 @@ REPO_URL="https://raw.githubusercontent.com/mr-Abdrahimov/luci-podkop-subscribe/
 BASE_URL="${REPO_URL}/files"
 
 echo "=========================================="
-echo "luci-app-podkop-subscribe Installation"
+echo "Установка luci-app-podkop-subscribe"
 echo "=========================================="
 echo ""
 
-# Check if running as root
+# Проверка прав root
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Error: This script must be run as root"
+    echo "Ошибка: Скрипт должен быть запущен от имени root"
     exit 1
 fi
 
-# Check if Podkop is installed (check for either podkop or luci-app-podkop)
+# Проверка установки Podkop
 if ! opkg list-installed | grep -qE "^(podkop|luci-app-podkop) "; then
-    echo "Error: Podkop is not installed"
-    echo "Please install Podkop first: opkg install podkop"
+    echo "Ошибка: Podkop не установлен"
+    echo "Сначала установите Podkop: opkg install podkop"
     exit 1
 fi
 
-# Check if section.js exists or can be found
+# Проверка наличия section.js
 if [ ! -f /www/luci-static/resources/view/podkop/section.js ] && [ ! -f /overlay/upper/www/luci-static/resources/view/podkop/section.js ]; then
-    echo "Warning: Podkop LuCI interface file not found"
-    echo "The plugin will create section.js, but Podkop LuCI interface may not work correctly"
-    echo "Please ensure Podkop LuCI interface is properly installed"
+    echo "Предупреждение: Файл интерфейса Podkop LuCI не найден"
+    echo "Плагин создаст section.js, но интерфейс Podkop может работать некорректно"
+    echo "Убедитесь, что интерфейс Podkop LuCI установлен правильно"
 fi
 
-# Check if wget is installed
+# Проверка установки wget
 if ! command -v wget >/dev/null 2>&1; then
-    echo "Installing wget..."
+    echo "Установка wget..."
     opkg update >/dev/null 2>&1 || true
     opkg install wget || {
-        echo "Error: Failed to install wget"
+        echo "Ошибка: Не удалось установить wget"
         exit 1
     }
 fi
 
-echo "Step 1: Creating directories..."
+echo "Шаг 1: Создание директорий..."
 mkdir -p /www/cgi-bin
 mkdir -p /www/luci-static/resources/view/podkop
 mkdir -p /usr/share/rpcd/acl.d
 
-echo "Step 2: Backing up original Podkop files..."
+echo "Шаг 2: Резервное копирование оригинальных файлов Podkop..."
 
-# Helper function to check if file contains plugin code
+# Вспомогательная функция для проверки наличия кода плагина
 contains_plugin_code() {
     [ ! -f "$1" ] && return 1
     grep -q "podkop-subscribe-config-list\|podkop-subscribe-loading\|view.podkop.subscribe\|enhanceSectionWithSubscribe" "$1" 2>/dev/null
 }
 
-# Check if backup already exists and is clean
+# Проверка существования резервной копии
 if [ -f /www/luci-static/resources/view/podkop/section.js.backup ]; then
     if ! contains_plugin_code /www/luci-static/resources/view/podkop/section.js.backup; then
-        echo "  ✓ Clean backup already exists"
+        echo "  ✓ Чистая резервная копия уже существует"
     else
-        echo "  ⚠ Existing backup contains plugin code, trying to get clean original..."
-        # Try to get clean original from overlay or opkg
+        echo "  ⚠ Резервная копия содержит код плагина, попытка получить чистый оригинал..."
+        # Попытка получить чистый оригинал из overlay
         if [ -f /overlay/upper/www/luci-static/resources/view/podkop/section.js ]; then
             if ! contains_plugin_code /overlay/upper/www/luci-static/resources/view/podkop/section.js; then
                 cp /overlay/upper/www/luci-static/resources/view/podkop/section.js /www/luci-static/resources/view/podkop/section.js.backup
-                echo "  ✓ Backup recreated from overlay"
+                echo "  ✓ Резервная копия пересоздана из overlay"
             fi
         fi
     fi
 elif [ -f /www/luci-static/resources/view/podkop/section.js ]; then
     if ! contains_plugin_code /www/luci-static/resources/view/podkop/section.js; then
-        # Current file is original, create backup
+        # Текущий файл оригинальный, создаём резервную копию
         cp /www/luci-static/resources/view/podkop/section.js /www/luci-static/resources/view/podkop/section.js.backup
-        echo "  ✓ Backup created: section.js.backup"
+        echo "  ✓ Создана резервная копия: section.js.backup"
     else
-        echo "  ℹ Current file contains plugin code (reinstalling)"
-        # Try to find original in overlay
+        echo "  ℹ Текущий файл содержит код плагина (переустановка)"
+        # Попытка найти оригинал в overlay
         if [ -f /overlay/upper/www/luci-static/resources/view/podkop/section.js ]; then
             if ! contains_plugin_code /overlay/upper/www/luci-static/resources/view/podkop/section.js; then
                 cp /overlay/upper/www/luci-static/resources/view/podkop/section.js /www/luci-static/resources/view/podkop/section.js.backup
-                echo "  ✓ Backup created from overlay"
+                echo "  ✓ Резервная копия создана из overlay"
             else
-                echo "  ⚠ No clean original found for backup"
+                echo "  ⚠ Чистый оригинал не найден для резервного копирования"
             fi
         else
-            echo "  ⚠ No clean original found for backup"
+            echo "  ⚠ Чистый оригинал не найден для резервного копирования"
         fi
     fi
 else
-    echo "  ⚠ Warning: section.js not found"
-    # Try to find original in overlay
+    echo "  ⚠ Предупреждение: section.js не найден"
+    # Попытка найти оригинал в overlay
     if [ -f /overlay/upper/www/luci-static/resources/view/podkop/section.js ]; then
         if ! contains_plugin_code /overlay/upper/www/luci-static/resources/view/podkop/section.js; then
             cp /overlay/upper/www/luci-static/resources/view/podkop/section.js /www/luci-static/resources/view/podkop/section.js.backup
-            echo "  ✓ Backup created from overlay"
+            echo "  ✓ Резервная копия создана из overlay"
         fi
     fi
 fi
 
-echo "Step 3: Downloading and installing plugin files..."
+echo "Шаг 3: Загрузка и установка файлов плагина..."
 
-# Download CGI scripts
-echo "  - Installing podkop-subscribe..."
+# Загрузка CGI скриптов
+echo "  - Установка podkop-subscribe..."
 wget -q -O /www/cgi-bin/podkop-subscribe "${BASE_URL}/www/cgi-bin/podkop-subscribe" || {
-    echo "Error: Failed to download podkop-subscribe"
+    echo "Ошибка: Не удалось загрузить podkop-subscribe"
     exit 1
 }
 chmod +x /www/cgi-bin/podkop-subscribe
 
-echo "  - Installing podkop-xray-config..."
+echo "  - Установка podkop-xray-config..."
 wget -q -O /www/cgi-bin/podkop-xray-config "${BASE_URL}/www/cgi-bin/podkop-xray-config" || {
-    echo "Error: Failed to download podkop-xray-config"
+    echo "Ошибка: Не удалось загрузить podkop-xray-config"
     exit 1
 }
 chmod +x /www/cgi-bin/podkop-xray-config
 
-echo "  - Installing podkop-configs-cache..."
+echo "  - Установка podkop-configs-cache..."
 wget -q -O /www/cgi-bin/podkop-configs-cache "${BASE_URL}/www/cgi-bin/podkop-configs-cache" || {
-    echo "Error: Failed to download podkop-configs-cache"
+    echo "Ошибка: Не удалось загрузить podkop-configs-cache"
     exit 1
 }
 chmod +x /www/cgi-bin/podkop-configs-cache
 
-# Download JavaScript files
-echo "  - Installing section.js..."
+echo "  - Установка podkop-current-outbound..."
+wget -q -O /www/cgi-bin/podkop-current-outbound "${BASE_URL}/www/cgi-bin/podkop-current-outbound" || {
+    echo "Ошибка: Не удалось загрузить podkop-current-outbound"
+    exit 1
+}
+chmod +x /www/cgi-bin/podkop-current-outbound
+
+# Загрузка JavaScript файлов
+echo "  - Установка section.js..."
 wget -q -O /www/luci-static/resources/view/podkop/section.js "${BASE_URL}/www/luci-static/resources/view/podkop/section.js" || {
-    echo "Error: Failed to download section.js"
+    echo "Ошибка: Не удалось загрузить section.js"
     exit 1
 }
 chmod 644 /www/luci-static/resources/view/podkop/section.js
 
-echo "  - Installing subscribe.js..."
+echo "  - Установка subscribe.js..."
 wget -q -O /www/luci-static/resources/view/podkop/subscribe.js "${BASE_URL}/www/luci-static/resources/view/podkop/subscribe.js" || {
-    echo "Error: Failed to download subscribe.js"
+    echo "Ошибка: Не удалось загрузить subscribe.js"
     exit 1
 }
 chmod 644 /www/luci-static/resources/view/podkop/subscribe.js
 
-echo "  - Installing subscribe-loader.js..."
+echo "  - Установка subscribe-loader.js..."
 wget -q -O /www/luci-static/resources/view/podkop/subscribe-loader.js "${BASE_URL}/www/luci-static/resources/view/podkop/subscribe-loader.js" || {
-    echo "Warning: Failed to download subscribe-loader.js (optional file)"
+    echo "Предупреждение: Не удалось загрузить subscribe-loader.js (опциональный файл)"
 }
 chmod 644 /www/luci-static/resources/view/podkop/subscribe-loader.js 2>/dev/null || true
 
-# Download ACL file
-echo "  - Installing ACL configuration..."
+# Загрузка ACL файла
+echo "  - Установка конфигурации ACL..."
 wget -q -O /usr/share/rpcd/acl.d/luci-app-podkop-subscribe.json "${BASE_URL}/usr/share/rpcd/acl.d/luci-app-podkop-subscribe.json" || {
-    echo "Error: Failed to download ACL file"
+    echo "Ошибка: Не удалось загрузить ACL файл"
     exit 1
 }
 
-echo "Step 4: Installing xray-core..."
+echo ""
+echo "=========================================="
+echo "Установка Xray (опционально)"
+echo "=========================================="
+echo ""
+echo "Xray необходим для поддержки протокола XHTTP в режиме Outbound Config."
+echo ""
+echo "Если вы планируете использовать режим 'Конфигурация Outbound' с XHTTP,"
+echo "рекомендуется установить Xray. Для остальных режимов (Connection URL,"
+echo "URLTest, Selector) Xray не требуется."
+echo ""
+echo "Установить Xray? (y/n)"
+printf "Ваш выбор [y]: "
 
-# Check if xray-core is already installed
-if opkg list-installed | grep -q "^xray-core "; then
-    echo "  ✓ xray-core is already installed"
+# Read user input with timeout
+INSTALL_XRAY="y"
+if read -t 30 user_input 2>/dev/null; then
+    case "$user_input" in
+        [Nn]|[Nn][Oo])
+            INSTALL_XRAY="n"
+            ;;
+        *)
+            INSTALL_XRAY="y"
+            ;;
+    esac
 else
-    echo "  - Updating package list..."
-    opkg update >/dev/null 2>&1 || {
-        echo "  ⚠ Warning: Failed to update package list, trying to continue..."
-    }
-    
-    echo "  - Installing xray-core..."
-    opkg install xray-core || {
-        echo "  ⚠ Warning: Failed to install xray-core automatically"
-        echo "  Please install manually: opkg update && opkg install xray-core"
-    }
+    echo ""
+    echo "Тайм-аут ввода. Используется значение по умолчанию: да"
 fi
 
-echo "Step 5: Creating Xray init script..."
+if [ "$INSTALL_XRAY" = "y" ]; then
+    echo ""
+    echo "Шаг 4: Установка xray-core..."
 
-# Check if xray init script already exists
-if [ -f /etc/init.d/xray ]; then
-    echo "  ✓ Xray init script already exists"
-else
-    cat > /etc/init.d/xray << 'EOF'
+    # Проверка установки xray-core
+    if opkg list-installed | grep -q "^xray-core "; then
+        echo "  ✓ xray-core уже установлен"
+    else
+        echo "  - Обновление списка пакетов..."
+        opkg update >/dev/null 2>&1 || {
+            echo "  ⚠ Предупреждение: Не удалось обновить список пакетов, продолжаем..."
+        }
+        
+        echo "  - Установка xray-core..."
+        opkg install xray-core || {
+            echo "  ⚠ Предупреждение: Не удалось автоматически установить xray-core"
+            echo "  Установите вручную: opkg update && opkg install xray-core"
+        }
+    fi
+
+    echo "Шаг 5: Создание скрипта инициализации Xray..."
+
+    # Проверка существования init скрипта xray
+    if [ -f /etc/init.d/xray ]; then
+        echo "  ✓ Скрипт инициализации Xray уже существует"
+    else
+        cat > /etc/init.d/xray << 'EOF'
 #!/bin/sh /etc/rc.common
 
 START=99
@@ -187,7 +226,7 @@ validate_config() {
 
 start_service() {
     validate_config || {
-        echo "Xray: invalid config"
+        echo "Xray: неверная конфигурация"
         return 1
     }
     procd_open_instance
@@ -200,62 +239,95 @@ start_service() {
 }
 EOF
 
-    chmod +x /etc/init.d/xray
-    echo "  ✓ Xray init script created"
-fi
+        chmod +x /etc/init.d/xray
+        echo "  ✓ Скрипт инициализации Xray создан"
+    fi
 
-echo "Step 6: Enabling and starting Xray service..."
+    echo "Шаг 6: Включение и запуск службы Xray..."
 
-# Enable xray service
-/etc/init.d/xray enable >/dev/null 2>&1 && echo "  ✓ Xray service enabled" || echo "  ⚠ Warning: Failed to enable Xray service"
+    # Включение службы xray
+    /etc/init.d/xray enable >/dev/null 2>&1 && echo "  ✓ Служба Xray включена" || echo "  ⚠ Предупреждение: Не удалось включить службу Xray"
 
-# Create config directory if it doesn't exist
-mkdir -p /etc/xray
+    # Создание директории конфигурации если не существует
+    mkdir -p /etc/xray
 
-# Check if xray config exists
-if [ ! -f /etc/xray/config.json ]; then
-    echo "  ℹ No Xray config found, skipping service start"
-    echo "  Note: Xray will start automatically after you apply a configuration"
+    # Проверка существования конфигурации xray
+    if [ ! -f /etc/xray/config.json ]; then
+        echo "  ℹ Конфигурация Xray не найдена, пропускаем запуск службы"
+        echo "  Примечание: Xray запустится автоматически после применения конфигурации"
+    else
+        # Попытка запуска службы xray
+        /etc/init.d/xray start >/dev/null 2>&1 && {
+            echo "  ✓ Служба Xray запущена"
+            /etc/init.d/xray status >/dev/null 2>&1 && echo "  ✓ Xray работает" || echo "  ⚠ Статус Xray неизвестен"
+        } || {
+            echo "  ℹ Служба Xray не запущена (конфигурация может быть неверной или отсутствовать)"
+        }
+    fi
+    
+    XRAY_INSTALLED="yes"
 else
-    # Try to start xray service
-    /etc/init.d/xray start >/dev/null 2>&1 && {
-        echo "  ✓ Xray service started"
-        /etc/init.d/xray status >/dev/null 2>&1 && echo "  ✓ Xray is running" || echo "  ⚠ Xray status unknown"
-    } || {
-        echo "  ℹ Xray service not started (config may be invalid or missing)"
-    }
+    echo ""
+    echo "Шаг 4-6: Установка Xray пропущена"
+    echo "  ℹ Режим 'Конфигурация Outbound' не будет доступен"
+    echo "  ℹ Вы можете установить Xray позже вручную: opkg install xray-core"
+    XRAY_INSTALLED="no"
 fi
 
-echo "Step 7: Restarting uhttpd..."
+echo ""
+echo "Шаг 7: Перезапуск uhttpd..."
 /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 
 echo ""
 echo "=========================================="
-echo "Installation completed successfully!"
+echo "Установка успешно завершена!"
 echo "=========================================="
 echo ""
-echo "The plugin has been installed. Please:"
-echo "1. Clear your browser cache (Ctrl+F5)"
-echo "2. Navigate to: LuCI -> Services -> Podkop"
-echo "3. Set Connection Type to 'Proxy'"
-echo "4. Set Configuration Type to 'Connection URL' or 'Outbound Config'"
-echo "5. You should see the Subscribe URL field"
+echo "Плагин установлен. Пожалуйста:"
+echo "1. Очистите кэш браузера (Ctrl+F5)"
+echo "2. Перейдите в: LuCI -> Службы -> Podkop"
+echo "3. Установите 'Тип подключения' в 'Proxy'"
+echo "4. Установите 'Тип конфигурации' в 'Connection URL' или 'Outbound Config'"
+echo "5. Вы увидите поле Subscribe URL"
 echo ""
-echo "What was installed:"
-echo "  ✓ luci-app-podkop-subscribe plugin"
-echo "  ✓ xray-core package"
-echo "  ✓ Xray init script (/etc/init.d/xray)"
-echo "  ✓ Xray service enabled"
+echo "Что было установлено:"
+echo "  ✓ Плагин luci-app-podkop-subscribe"
+
+if [ "$XRAY_INSTALLED" = "yes" ]; then
+    echo "  ✓ Пакет xray-core"
+    echo "  ✓ Скрипт инициализации Xray (/etc/init.d/xray)"
+    echo "  ✓ Служба Xray включена"
+else
+    echo "  ⊘ Пакет xray-core (пропущен по выбору пользователя)"
+fi
+
 echo ""
-echo "Features:"
-echo "  - Connection URL mode: Get configurations and apply to Podkop proxy"
-echo "  - Outbound Config mode: Get configurations and apply directly to Xray"
-echo "  - URLTest mode: Auto-select best proxy based on latency"
-echo "  - Selector mode: Manually select from multiple proxies"
-echo "  - Auto-fill button: Quick Outbound configuration"
-echo "  - Supported protocols: vless://, ss://, trojan://, hy2://, hysteria2://, socks://"
-echo "  - Theme support: Automatically adapts to light/dark themes"
+echo "Возможности:"
+echo "  - Режим Connection URL: Получение конфигураций и применение к Podkop"
+
+if [ "$XRAY_INSTALLED" = "yes" ]; then
+    echo "  - Режим Outbound Config: Получение конфигураций и применение напрямую к Xray"
+else
+    echo "  - Режим Outbound Config: Недоступен (требуется Xray)"
+fi
+
+echo "  - Режим URLTest: Автоматический выбор лучшего прокси по задержке"
+echo "  - Режим Selector: Ручной выбор из нескольких прокси"
+echo "  - Кнопка автозаполнения: Быстрая настройка Outbound"
+echo "  - Кэширование конфигураций: Автоматическое сохранение и восстановление"
+echo "  - Подсветка активных подключений во всех режимах"
+echo "  - Поддержка протоколов: vless://, ss://, trojan://, hy2://, hysteria2://, socks://"
+echo "  - Поддержка тем: Автоматическая адаптация к светлой/тёмной теме"
 echo ""
-echo "To uninstall, run:"
+
+if [ "$XRAY_INSTALLED" = "no" ]; then
+    echo "Примечание:"
+    echo "  Для использования режима 'Конфигурация Outbound' с XHTTP установите Xray:"
+    echo "    opkg update && opkg install xray-core"
+    echo "  Затем создайте init-скрипт или запустите установку плагина заново."
+    echo ""
+fi
+
+echo "Для удаления запустите:"
 echo "  sh <(wget -O - ${REPO_URL}/uninstall.sh)"
 echo ""

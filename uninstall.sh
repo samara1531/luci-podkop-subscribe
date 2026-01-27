@@ -38,6 +38,12 @@ if [ -f /www/cgi-bin/podkop-configs-cache ]; then
     PLUGIN_REMOVED=1
 fi
 
+if [ -f /www/cgi-bin/podkop-current-outbound ]; then
+    rm -f /www/cgi-bin/podkop-current-outbound
+    echo "  ✓ Removed: /www/cgi-bin/podkop-current-outbound"
+    PLUGIN_REMOVED=1
+fi
+
 # Remove JavaScript files
 if [ -f /www/luci-static/resources/view/podkop/subscribe.js ]; then
     rm -f /www/luci-static/resources/view/podkop/subscribe.js
@@ -164,6 +170,11 @@ if [ -d /tmp/podkop-subscribe-cache ]; then
     echo "  ✓ Removed: /tmp/podkop-subscribe-cache"
 else
     echo "  ℹ Cache directory not found"
+fi
+
+if [ -f /tmp/podkop-xray-current-outbound ]; then
+    rm -f /tmp/podkop-xray-current-outbound
+    echo "  ✓ Removed: /tmp/podkop-xray-current-outbound"
 fi
 
 echo ""
