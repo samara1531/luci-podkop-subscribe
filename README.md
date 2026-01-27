@@ -376,8 +376,8 @@ logread | grep xray | tail -20
 
 ## Протестировано на
 
-- **Podkop**: v0.7.12
-- **LuCI App**: v0.7.12
+- **Podkop**: v0.7.13 - v0.7.14
+- **LuCI App**: v0.7.12 - v0.7.14
 - **OpenWrt**: 24.10.4 - 24.10.5
 - **Xray**: 25.1.30
 
