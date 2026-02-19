@@ -2427,22 +2427,36 @@ function enhanceSectionWithSubscribe(section) {
       var finalResult = result || {};
       var effectiveMode = finalResult.mode || mode;
       setPingCounter(section_id, finalResult.tested || finalResult.eligible || 0, finalResult.total || 0);
+      var finalize = function () {
+        renderImmediateAutoUpdateLog(section_id, finalResult, false, ev);
+        autoLoadCachedConfigs(section_id, effectiveMode);
+        ui.addNotification(null, E("p", {}, _("Auto-update completed.")), "info");
+      };
 
       if (effectiveMode === "outbound" && finalResult.best_url) {
         try {
           var outboundData = parseVlessConfigUrl(finalResult.best_url);
           setOutboundTextareaValue(section_id, outboundData);
-          finalResult.changed = "1";
-          finalResult.applied = "1";
-          finalResult.note = "outbound_best_applied_to_json";
+          applySelectedConfig(section_id, "outbound", {
+            outbound_json: JSON.stringify(outboundData)
+          }).then(function () {
+            finalResult.changed = "1";
+            finalResult.applied = "1";
+            finalResult.note = "outbound_best_applied_via_backend";
+            finalize();
+          }).catch(function (applyErr) {
+            finalResult.note = "outbound_best_found_but_backend_apply_failed";
+            finalResult.apply_error = applyErr && applyErr.message ? applyErr.message : String(applyErr || "");
+            renderImmediateAutoUpdateLog(section_id, finalResult, true, ev);
+            ui.addNotification(null, E("p", {}, _("Auto-update finished but apply failed: ") + finalResult.apply_error), "warning");
+          });
+          return;
         } catch (e) {
           finalResult.note = "outbound_best_found_but_json_apply_failed";
         }
       }
 
-      renderImmediateAutoUpdateLog(section_id, finalResult, false, ev);
-      autoLoadCachedConfigs(section_id, effectiveMode);
-      ui.addNotification(null, E("p", {}, _("Auto-update completed.")), "info");
+      finalize();
     }).catch(function (err) {
       renderImmediateAutoUpdateLog(section_id, { message: err.message }, true, ev);
       ui.addNotification(null, E("p", {}, _("Auto-update failed: ") + err.message), "warning");
