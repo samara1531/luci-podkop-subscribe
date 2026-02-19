@@ -23,15 +23,34 @@ if [ ! -x /usr/bin/podkop-subscribe-autoupdate ]; then
     exit 1
 fi
 
-if /usr/bin/podkop-subscribe-autoupdate --force "$section_id" >/dev/null 2>&1; then
+run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" 2>&1)"
+run_rc=$?
+status_file="/tmp/podkop-subscribe-autoupdate/${section_id}.status"
+
+if [ $run_rc -eq 0 ]; then
     json_init
     json_add_boolean "success" 1
     json_add_string "message" "Auto-update completed"
+
+    if [ -f "$status_file" ]; then
+        while IFS='=' read -r key val; do
+            [ -z "$key" ] && continue
+            json_add_string "$key" "$val"
+        done < "$status_file"
+    fi
+
+    if [ -n "$run_log" ]; then
+        json_add_string "log" "$run_log"
+    fi
+
     json_dump
     exit 0
 fi
 
 json_init
 json_add_string "error" "Auto-update failed"
+if [ -n "$run_log" ]; then
+    json_add_string "log" "$run_log"
+fi
 json_dump
 exit 1

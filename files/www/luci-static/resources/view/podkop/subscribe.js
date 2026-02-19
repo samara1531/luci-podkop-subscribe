@@ -515,6 +515,61 @@ function runImmediateAutoUpdate(section_id) {
   });
 }
 
+function renderImmediateAutoUpdateLog(section_id, result, isError, ev) {
+  var logId = "podkop-subscribe-runlog-" + section_id;
+  var logEl = document.getElementById(logId);
+
+  if (!logEl) {
+    logEl = document.createElement("div");
+    logEl.id = logId;
+    logEl.style.marginTop = "8px";
+    logEl.style.whiteSpace = "pre-line";
+    logEl.className = "podkop-subscribe-warning";
+
+    var anchor = null;
+    if (ev && ev.target) {
+      anchor = ev.target.closest(".cbi-value");
+    }
+    if (anchor && anchor.parentNode) {
+      if (anchor.nextSibling) {
+        anchor.parentNode.insertBefore(logEl, anchor.nextSibling);
+      } else {
+        anchor.parentNode.appendChild(logEl);
+      }
+    }
+  }
+
+  var lines = [];
+  if (isError) {
+    lines.push("Status: error");
+    lines.push("Details: " + (result && result.message ? result.message : "failed"));
+  } else {
+    lines.push("Status: " + (result.status || "ok"));
+    if (result.mode) lines.push("Mode: " + result.mode);
+    if (result.total != null) lines.push("Found configs: " + result.total);
+    if (result.eligible != null) lines.push("Eligible: " + result.eligible);
+    if (result.excluded != null) lines.push("Excluded: " + result.excluded);
+    if (result.best_title) lines.push("Best: " + result.best_title);
+    if (result.changed != null) lines.push("Changed: " + (String(result.changed) === "1" ? "yes" : "no"));
+    if (result.applied != null) lines.push("Applied entries: " + result.applied);
+    if (result.note) lines.push("Note: " + result.note);
+    if (result.reason) lines.push("Reason: " + result.reason);
+  }
+
+  if (result && result.log) {
+    lines.push("Log: " + result.log);
+  }
+
+  if (isError) {
+    logEl.className = "podkop-subscribe-error-small";
+  } else if (result && result.status === "skipped") {
+    logEl.className = "podkop-subscribe-warning";
+  } else {
+    logEl.className = "podkop-subscribe-success";
+  }
+  logEl.textContent = lines.join("\n");
+}
+
 // Check if should show config list
 function shouldShowConfigList() {
   try {
@@ -1480,11 +1535,13 @@ function enhanceSectionWithSubscribe(section) {
 
     ui.addNotification(null, E("p", {}, _("Running immediate auto-update...")), "info");
 
-    runImmediateAutoUpdate(section_id).then(function () {
+    runImmediateAutoUpdate(section_id).then(function (result) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
       autoLoadCachedConfigs(section_id, mode);
-      ui.addNotification(null, E("p", {}, _("Auto-update completed. Reload page to see applied values.")), "info");
+      renderImmediateAutoUpdateLog(section_id, result || {}, false, ev);
+      ui.addNotification(null, E("p", {}, _("Auto-update completed.")), "info");
     }).catch(function (err) {
+      renderImmediateAutoUpdateLog(section_id, { message: err.message }, true, ev);
       ui.addNotification(null, E("p", {}, _("Auto-update failed: ") + err.message), "warning");
     });
 

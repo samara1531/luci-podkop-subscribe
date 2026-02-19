@@ -49,7 +49,7 @@ New per-section options in LuCI:
 - `Priority Rules` - `keyword=score` pairs, comma-separated.
 - `Exclude Keywords` - comma-separated keywords to ignore.
 - `Max Configs` - cap for URLTest/Selector auto-filled lists.
-- `Update Now` button - runs refresh + latency test immediately (no wait for interval).
+- `Update Now` button - runs refresh + latency test immediately (no wait for interval) and shows run log under the button.
 
 How it works:
 

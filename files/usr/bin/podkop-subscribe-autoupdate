@@ -59,6 +59,16 @@ mark_run_now() {
     date +%s > "$STATE_DIR/$section.last"
 }
 
+write_status() {
+    section="$1"
+    shift
+    status_file="$STATE_DIR/$section.status"
+    : > "$status_file"
+    for kv in "$@"; do
+        printf '%s\n' "$kv" >> "$status_file"
+    done
+}
+
 extract_title() {
     line="$1"
     title="$(printf '%s' "$line" | sed -n 's/.*#\(.*\)$/\1/p')"
@@ -221,13 +231,26 @@ apply_mode_list() {
 
 process_section() {
     section="$1"
+    mode="unknown"
+    total_count=0
+    eligible_count=0
+    excluded_count=0
+    best_url=""
+    best_title=""
+    changed=0
+    applied_count=0
+    note=""
+    status="ok"
 
     if [ "$FORCE_MODE" -eq 1 ] && [ -n "$FORCE_SECTION" ] && [ "$section" != "$FORCE_SECTION" ]; then
         return 0
     fi
 
     connection_type="$(uci -q get "podkop.$section.connection_type" || echo '')"
-    [ "$connection_type" = "proxy" ] || return 0
+    if [ "$connection_type" != "proxy" ]; then
+        [ "$FORCE_MODE" -eq 1 ] && write_status "$section" "status=skipped" "reason=connection_type_not_proxy"
+        return 0
+    fi
 
     if [ "$FORCE_MODE" -ne 1 ]; then
         auto="$(uci -q get "podkop.$section.subscribe_auto_update" || echo '0')"
@@ -240,7 +263,11 @@ process_section() {
     mode="$(uci -q get "podkop.$section.proxy_config_type" || echo 'url')"
     case "$mode" in
         url|urltest|selector|outbound) ;;
-        *) mark_run_now "$section"; return 0 ;;
+        *)
+            mark_run_now "$section"
+            [ "$FORCE_MODE" -eq 1 ] && write_status "$section" "status=skipped" "reason=unsupported_mode" "mode=$mode"
+            return 0
+            ;;
     esac
 
     if [ "$mode" = "outbound" ]; then
@@ -248,7 +275,11 @@ process_section() {
     else
         sub_url="$(uci -q get "podkop.$section.subscribe_url" || echo '')"
     fi
-    [ -n "$sub_url" ] || { mark_run_now "$section"; return 0; }
+    if [ -z "$sub_url" ]; then
+        mark_run_now "$section"
+        [ "$FORCE_MODE" -eq 1 ] && write_status "$section" "status=skipped" "reason=empty_subscribe_url" "mode=$mode"
+        return 0
+    fi
 
     priority_rules="$(uci -q get "podkop.$section.subscribe_priority_rules" || echo '')"
     exclude_keywords="$(uci -q get "podkop.$section.subscribe_exclude_keywords" || echo '')"
@@ -267,15 +298,20 @@ process_section() {
     if ! fetch_subscription_lines "$sub_url" "$lines_file"; then
         rm -f "$lines_file" "$ranked_file"
         mark_run_now "$section"
+        [ "$FORCE_MODE" -eq 1 ] && write_status "$section" "status=error" "reason=fetch_or_decode_failed" "mode=$mode"
         return 0
     fi
+
+    total_count="$(wc -l < "$lines_file" 2>/dev/null || echo 0)"
 
     while IFS="$(printf '\t')" read -r url title; do
         [ -z "$url" ] && continue
         text="$title $url"
         if is_excluded "$text" "$exclude_keywords"; then
+            excluded_count=$((excluded_count + 1))
             continue
         fi
+        eligible_count=$((eligible_count + 1))
         score="$(priority_score "$text" "$priority_rules")"
         host="$(extract_host "$url")"
         lat="$(ping_latency "$host")"
@@ -285,29 +321,46 @@ process_section() {
     if [ ! -s "$ranked_file" ]; then
         rm -f "$lines_file" "$ranked_file"
         mark_run_now "$section"
+        [ "$FORCE_MODE" -eq 1 ] && write_status "$section" \
+            "status=ok" "mode=$mode" "total=$total_count" "eligible=0" "excluded=$excluded_count" \
+            "applied=0" "changed=0" "note=no_eligible_configs_after_filters"
         return 0
     fi
 
     sort -t "$(printf '\t')" -k1,1nr -k2,2n "$ranked_file" -o "$ranked_file"
+    best_url="$(head -n1 "$ranked_file" | cut -f3)"
+    best_title="$(head -n1 "$ranked_file" | cut -f4)"
 
     case "$mode" in
         url)
-            best_url="$(head -n1 "$ranked_file" | cut -f3)"
+            current_url="$(uci -q get "podkop.$section.proxy_string" || echo '')"
             apply_mode_url "$section" "$best_url"
+            [ "$best_url" != "$current_url" ] && changed=1 || changed=0
+            applied_count=1
             ;;
         urltest)
             apply_mode_list "$section" "urltest_proxy_links" "$ranked_file" "$max_items"
+            applied_count="$max_items"
+            [ "$eligible_count" -lt "$max_items" ] && applied_count="$eligible_count"
+            changed=1
             ;;
         selector)
             apply_mode_list "$section" "selector_proxy_links" "$ranked_file" "$max_items"
+            applied_count="$max_items"
+            [ "$eligible_count" -lt "$max_items" ] && applied_count="$eligible_count"
+            changed=1
             ;;
         outbound)
             # Outbound uses manual JSON apply in LuCI; we only refresh timing state.
+            note="outbound_mode_manual_json_apply"
             ;;
     esac
 
     rm -f "$lines_file" "$ranked_file"
     mark_run_now "$section"
+    [ "$FORCE_MODE" -eq 1 ] && write_status "$section" \
+        "status=$status" "mode=$mode" "total=$total_count" "eligible=$eligible_count" "excluded=$excluded_count" \
+        "best_url=$best_url" "best_title=$best_title" "applied=$applied_count" "changed=$changed" "note=$note"
 }
 
 sections="$(uci -q show podkop 2>/dev/null | sed -n 's/^podkop\.\([^.=]*\)=section$/\1/p')"
