@@ -1291,13 +1291,36 @@ function triggerLuCiSaveApply() {
   if (saveApplyInProgress) return false;
   saveApplyInProgress = true;
 
-  function tryClick() {
-    var btn = document.querySelector(
-      "button.cbi-button-apply, input.cbi-button-apply, button[name='cbi.apply'], input[name='cbi.apply']"
+  function isSubscribeActionButton(node) {
+    if (!node) return false;
+    var mark = ((node.id || "") + " " + (node.name || "")).toLowerCase();
+    return (
+      mark.indexOf("subscribe_run_now") !== -1 ||
+      mark.indexOf("subscribe_ping_now") !== -1 ||
+      mark.indexOf("subscribe_ping_now_all") !== -1 ||
+      mark.indexOf("subscribe_fetch") !== -1
     );
-    if (btn && typeof btn.click === "function") {
-      btn.click();
-      return true;
+  }
+
+  function tryClick() {
+    var actionScopes = [
+      document.querySelector(".cbi-page-actions"),
+      document.querySelector(".cbi-map")
+    ];
+    for (var s = 0; s < actionScopes.length; s++) {
+      var scope = actionScopes[s];
+      if (!scope) continue;
+      var buttons = scope.querySelectorAll(
+        "button.cbi-button-apply, input.cbi-button-apply, button[name='cbi.apply'], input[name='cbi.apply']"
+      );
+      for (var i = 0; i < buttons.length; i++) {
+        var btn = buttons[i];
+        if (isSubscribeActionButton(btn)) continue;
+        if (typeof btn.click === "function") {
+          btn.click();
+          return true;
+        }
+      }
     }
     var formNode = document.querySelector("form.cbi-map, form");
     if (formNode && typeof formNode.submit === "function") {

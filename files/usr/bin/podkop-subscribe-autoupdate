@@ -456,6 +456,12 @@ process_section() {
         return 0
     fi
 
+    # Append manual links first so they are not dropped by Max Configs cap.
+    manual_any=0
+    if append_manual_lines "$section" "$lines_file"; then
+        manual_any=1
+    fi
+
     fetched_any=0
     if [ -s "$source_urls_file" ]; then
         while IFS= read -r sub_url || [ -n "$sub_url" ]; do
@@ -465,11 +471,6 @@ process_section() {
                 fetched_any=1
             fi
         done < "$source_urls_file"
-    fi
-
-    manual_any=0
-    if append_manual_lines "$section" "$lines_file"; then
-        manual_any=1
     fi
 
     if [ "$fetched_any" -ne 1 ] && [ "$manual_any" -ne 1 ]; then
