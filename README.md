@@ -89,3 +89,25 @@ sh /tmp/podkop-subscribe-uninstall.sh
 - После обновления frontend-файлов делайте жесткое обновление браузера (`Ctrl+F5`).
 - Если скрипты скачивались на Windows и переносились вручную, проверьте Unix line endings и отсутствие BOM.
 - Поле `Outbound Configuration` автоматически форматируется в pretty JSON при загрузке страницы (только визуально).
+
+## Changelog (2026-02)
+
+- UI/Theme:
+  - Fixed dark theme (Argon) compatibility for subscribe list colors and hover states (removed white fallbacks).
+  - Limited subscribe list width and improved responsive behavior on mobile.
+
+- Blocking / Auto-update:
+  - `Update Now` now uses current blocked list from UI (works even before manual Save).
+  - Block list storage supports `enc:<urlencoded>` with backward compatibility.
+  - Blocked matching improved: full URL + normalized `scheme://host:port` key to handle rotating params (`sni/sid/...`).
+
+- Sources / Ping:
+  - `Update Now`, `Ping Test`, and `Ping Test All` now use live sources from current UI form, including `Manual Config Links`.
+  - Manual links are added before `Max Configs` truncation so they are not silently dropped from ping candidates.
+  - Backend URL scheme parsing for manual links is case-insensitive (`VLESS://` is accepted).
+
+- Stability:
+  - Removed auto `Save & Apply` trigger after `Update Now` to avoid repeated loop runs on some LuCI pages.
+
+- Localization:
+  - Added Russian translations for new subscribe UI labels, hints, notifications, and status log texts.
