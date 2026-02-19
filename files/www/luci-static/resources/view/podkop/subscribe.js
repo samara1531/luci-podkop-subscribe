@@ -340,7 +340,6 @@ function parseVlessConfigUrl(vlessUrl) {
   var flow = decodeComponent(params.get("flow") || "");
   var packetEncoding = decodeComponent(params.get("packetEncoding") || "");
   var alpn = decodeComponent(params.get("alpn") || "");
-  var extraRaw = decodeComponent(params.get("extra") || "");
 
   var outbound = {
     type: "vless",
@@ -396,21 +395,6 @@ function parseVlessConfigUrl(vlessUrl) {
       host: hostParam || server,
       mode: modeParam || "auto"
     };
-
-    if (extraRaw) {
-      try {
-        var extraObj = JSON.parse(extraRaw);
-        if (extraObj && typeof extraObj === "object" && !Array.isArray(extraObj)) {
-          Object.keys(extraObj).forEach(function (key) {
-            if (outbound.transport[key] == null) {
-              outbound.transport[key] = extraObj[key];
-            }
-          });
-        }
-      } catch (e) {
-        // Ignore invalid `extra` payload to keep base transport config usable.
-      }
-    }
   } else if (transportType === "ws") {
     outbound.transport = {
       type: "ws",
@@ -1574,59 +1558,6 @@ function enhanceSectionWithSubscribe(section) {
       false,
       true
     );
-
-    return false;
-  };
-
-  // Fill outbound button for proxy_config_type = "outbound"
-  o = section.option(
-    form.Button,
-    "fill_outbound_config",
-    _("Заполнить outbound"),
-    _("Заполнить конфигурацию исходящего соединения стандартными данными")
-  );
-  o.depends("proxy_config_type", "outbound");
-  o.inputtitle = _("Заполнить outbound");
-  o.inputstyle = "apply";
-
-  o.onclick = function (ev, section_id) {
-    if (ev && ev.preventDefault) ev.preventDefault();
-    if (ev && ev.stopPropagation) ev.stopPropagation();
-
-    // Find outbound_json textarea for THIS section
-    var outboundTextarea =
-      document.getElementById("widget.cbid.podkop." + section_id + ".outbound_json") ||
-      document.getElementById("cbid.podkop." + section_id + ".outbound_json") ||
-      document.querySelector('textarea[id*="podkop.' + section_id + '.outbound_json"]');
-
-    if (outboundTextarea) {
-      var outboundData = {
-        "type": "socks",
-        "tag": "vless-xhttp",
-        "server": "127.0.0.1",
-        "server_port": 10808
-      };
-
-      outboundTextarea.value = JSON.stringify(outboundData, null, 2);
-      
-      // Trigger change events
-      if (outboundTextarea.dispatchEvent) {
-        outboundTextarea.dispatchEvent(new Event("change", { bubbles: true }));
-        outboundTextarea.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-
-      ui.addNotification(
-        null,
-        E("p", {}, _("Конфигурация исходящего соединения заполнена")),
-        "info"
-      );
-    } else {
-      ui.addNotification(
-        null,
-        E("p", {}, _("Не удалось найти поле конфигурации исходящего соединения")),
-        "warning"
-      );
-    }
 
     return false;
   };
