@@ -413,6 +413,11 @@ function refetchConfigsForSection(select) {
 
   // Try to load from cache first, or fetch if we have a URL
   autoLoadCachedConfigs(section_id, newType);
+  if (newType === "outbound") {
+    setTimeout(function () {
+      prettyFormatAllOutboundTextareas();
+    }, 80);
+  }
   
   // If we have a URL, we could also refetch (but cache should be enough)
   // Uncomment below if you want to always refetch when changing modes
@@ -623,6 +628,24 @@ function setOutboundTextareaValue(section_id, outboundData) {
     outboundTextarea.dispatchEvent(new Event("change", { bubbles: true }));
     outboundTextarea.dispatchEvent(new Event("input", { bubbles: true }));
   }
+}
+
+function prettyFormatOutboundTextarea(textarea) {
+  if (!textarea || typeof textarea.value !== "string") return;
+  var raw = textarea.value.trim();
+  if (!raw) return;
+  try {
+    textarea.value = JSON.stringify(JSON.parse(raw), null, 2);
+  } catch (e) {
+    // keep original when value is not valid JSON
+  }
+}
+
+function prettyFormatAllOutboundTextareas() {
+  var nodes = document.querySelectorAll('textarea[id*="outbound_json"], textarea[name*="outbound_json"]');
+  nodes.forEach(function (node) {
+    prettyFormatOutboundTextarea(node);
+  });
 }
 
 // Create warning/loading message element
@@ -2092,6 +2115,7 @@ function initAutoLoadCachedConfigs() {
         autoLoadCachedConfigs(section_id, currentMode);
       }
     });
+    prettyFormatAllOutboundTextareas();
   }, 800);
 }
 
@@ -2103,6 +2127,7 @@ function enhanceSectionWithSubscribe(section) {
   setTimeout(function () {
     initConfigListHandlers();
     initAutoLoadCachedConfigs();
+    prettyFormatAllOutboundTextareas();
   }, 500);
 
   // Subscribe URL for proxy_config_type = "url", "urltest" and "selector"
