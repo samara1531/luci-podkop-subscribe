@@ -1072,6 +1072,20 @@ function getCurrentProxyConfigType(section_id) {
   return select ? select.value : null;
 }
 
+function triggerSaveApply() {
+  var applyBtn =
+    document.querySelector("button.cbi-button-apply") ||
+    document.querySelector("input.cbi-button-apply") ||
+    document.querySelector('button[name="cbi.apply"]') ||
+    document.querySelector('input[name="cbi.apply"]');
+
+  if (!applyBtn || applyBtn.disabled) {
+    return false;
+  }
+  applyBtn.click();
+  return true;
+}
+
 function getPingButtonElement(section_id) {
   return (
     document.getElementById("cbid.podkop." + section_id + ".subscribe_ping_now") ||
@@ -1471,6 +1485,9 @@ function createUrlClickHandler(config, configItem, configList, section_id, isXht
     var successDiv = createSuccessMessage(_("Конфигурация выбрана"));
     configItem.appendChild(successDiv);
     setTimeout(function () {
+      triggerSaveApply();
+    }, 100);
+    setTimeout(function () {
       if (successDiv.parentNode) {
         successDiv.parentNode.removeChild(successDiv);
       }
@@ -1732,6 +1749,9 @@ function createOutboundClickHandlerEnhanced(config, configItem, configList, sect
 
     var messageNode = createSuccessMessage(_("Outbound JSON is filled."));
     configItem.appendChild(messageNode);
+    setTimeout(function () {
+      triggerSaveApply();
+    }, 100);
     setTimeout(function () {
       if (messageNode.parentNode) {
         messageNode.parentNode.removeChild(messageNode);
