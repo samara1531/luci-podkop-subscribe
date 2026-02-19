@@ -1,5 +1,5 @@
 #!/bin/sh
-# Apply selected Podkop proxy config immediately (without clicking Save & Apply)
+# Мгновенное применение выбранной конфигурации Podkop (без клика Save & Apply)
 
 . /usr/share/libubox/jshn.sh
 
@@ -16,10 +16,10 @@ json_error() {
     exit 1
 }
 
-[ -n "$POST_DATA" ] || json_error "Request body is required"
+[ -n "$POST_DATA" ] || json_error "Тело запроса обязательно"
 
 if ! printf '%s' "$POST_DATA" | grep -q '^[[:space:]]*{'; then
-    json_error "JSON body is required"
+    json_error "Ожидается JSON в теле запроса"
 fi
 
 section_id="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.section_id' 2>/dev/null || true)"
@@ -32,32 +32,32 @@ mode="$(printf '%s' "$mode" | tr -d '\n')"
 
 case "$section_id" in
     ''|*[!a-zA-Z0-9_]*)
-        json_error "Invalid section_id"
+        json_error "Некорректный section_id"
         ;;
 esac
 
 if ! uci -q show "podkop.$section_id" >/dev/null 2>&1; then
-    json_error "Section not found"
+    json_error "Секция не найдена"
 fi
 
 case "$mode" in
     url)
-        [ -n "$value" ] || json_error "value is required for url mode"
+        [ -n "$value" ] || json_error "Для режима url требуется value"
         uci -q set "podkop.$section_id.proxy_config_type=url"
         uci -q set "podkop.$section_id.proxy_string=$value"
         ;;
     outbound)
-        [ -n "$outbound_json" ] || json_error "outbound_json is required for outbound mode"
+        [ -n "$outbound_json" ] || json_error "Для режима outbound требуется outbound_json"
         uci -q set "podkop.$section_id.proxy_config_type=outbound"
         uci -q set "podkop.$section_id.outbound_json=$outbound_json"
         ;;
     *)
-        json_error "Unsupported mode"
+        json_error "Неподдерживаемый режим"
         ;;
 esac
 
 if ! uci -q commit podkop >/dev/null 2>&1; then
-    json_error "Failed to commit podkop config"
+    json_error "Не удалось сохранить конфиг podkop"
 fi
 
 if [ -x /etc/init.d/podkop ]; then
@@ -69,4 +69,3 @@ json_add_boolean "success" 1
 json_add_string "section_id" "$section_id"
 json_add_string "mode" "$mode"
 json_dump
-

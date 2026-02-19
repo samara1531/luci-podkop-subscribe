@@ -28,14 +28,14 @@ ping_all="$(printf '%s' "$ping_all" | tr -d '\r\n')"
 
 if [ -z "$section_id" ]; then
     json_init
-    json_add_string "error" "section_id is required"
+    json_add_string "error" "section_id обязателен"
     json_dump
     exit 1
 fi
 
 if [ ! -x /usr/bin/podkop-subscribe-autoupdate ]; then
     json_init
-    json_add_string "error" "auto-update script is not installed"
+    json_add_string "error" "Скрипт автообновления не установлен"
     json_dump
     exit 1
 fi
@@ -67,7 +67,7 @@ if [ "$action" = "status" ]; then
     if [ -f "$pid_file" ]; then
         pid="$(cat "$pid_file" 2>/dev/null || true)"
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            json_with_status "Full ping test is running" 1
+            json_with_status "Полный пинг-тест выполняется" 1
             exit 0
         fi
     fi
@@ -75,11 +75,11 @@ if [ "$action" = "status" ]; then
     if [ -f "$done_file" ]; then
         rc="$(cat "$done_file" 2>/dev/null || echo 1)"
         if [ "$rc" = "0" ]; then
-            json_with_status "Ping test completed" 0
+            json_with_status "Пинг-тест завершен" 0
             exit 0
         fi
         json_init
-        json_add_string "error" "Ping test failed"
+        json_add_string "error" "Пинг-тест завершился с ошибкой"
         if [ -f "$log_file" ]; then
             json_add_string "details" "$(tail -n 20 "$log_file" 2>/dev/null)"
         fi
@@ -87,7 +87,7 @@ if [ "$action" = "status" ]; then
         exit 1
     fi
 
-    json_with_status "No running ping test" 0
+    json_with_status "Сейчас нет запущенного пинг-теста" 0
     exit 0
 fi
 
@@ -95,7 +95,7 @@ if [ "$action" = "start" ]; then
     if [ -f "$pid_file" ]; then
         pid="$(cat "$pid_file" 2>/dev/null || true)"
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            json_with_status "Full ping test already running" 1
+            json_with_status "Полный пинг-тест уже выполняется" 1
             exit 0
         fi
     fi
@@ -109,7 +109,7 @@ if [ "$action" = "start" ]; then
     ) &
     echo "$!" > "$pid_file"
 
-    json_with_status "Full ping test started" 1
+    json_with_status "Полный пинг-тест запущен" 1
     exit 0
 fi
 
@@ -121,12 +121,12 @@ fi
 run_rc=$?
 
 if [ $run_rc -eq 0 ]; then
-    json_with_status "Ping test completed" 0
+    json_with_status "Пинг-тест завершен" 0
     exit 0
 fi
 
 json_init
-json_add_string "error" "Ping test failed"
+json_add_string "error" "Пинг-тест завершился с ошибкой"
 json_add_string "details" "$run_log"
 json_dump
 exit 1

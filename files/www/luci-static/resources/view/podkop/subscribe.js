@@ -883,15 +883,15 @@ function runImmediateAutoUpdate(section_id) {
         if (result && !result.error) {
           resolve(result);
         } else {
-          reject(new Error(result && result.error ? result.error : "Unknown error"));
+          reject(new Error(result && result.error ? result.error : "Неизвестная ошибка"));
         }
       } catch (e) {
-        reject(new Error("Invalid JSON response"));
+        reject(new Error("Некорректный JSON в ответе"));
       }
     };
 
     xhr.onerror = function () {
-      reject(new Error("Network error"));
+      reject(new Error("Сетевая ошибка"));
     };
 
     xhr.send(section_id);
@@ -915,15 +915,15 @@ function requestPingApi(payload) {
         if (result && !result.error) {
           resolve(result);
         } else {
-          reject(new Error(result && result.error ? result.error : "Unknown error"));
+          reject(new Error(result && result.error ? result.error : "Неизвестная ошибка"));
         }
       } catch (e) {
-        reject(new Error("Invalid JSON response"));
+        reject(new Error("Некорректный JSON в ответе"));
       }
     };
 
     xhr.onerror = function () {
-      reject(new Error("Network error"));
+      reject(new Error("Сетевая ошибка"));
     };
 
     xhr.send(JSON.stringify(payload || {}));
@@ -1112,15 +1112,15 @@ function applySelectedConfig(section_id, mode, payload) {
         if (result && !result.error) {
           resolve(result);
         } else {
-          reject(new Error(result && result.error ? result.error : "Unknown error"));
+          reject(new Error(result && result.error ? result.error : "Неизвестная ошибка"));
         }
       } catch (e) {
-        reject(new Error("Invalid JSON response"));
+        reject(new Error("Некорректный JSON в ответе"));
       }
     };
 
     xhr.onerror = function () {
-      reject(new Error("Network error"));
+      reject(new Error("Сетевая ошибка"));
     };
 
     var body = {
@@ -1500,7 +1500,7 @@ function createUrlClickHandler(config, configItem, configList, section_id, isXht
 
     // Block xhttp configs
     if (isXhttp) {
-      var errorDiv = createErrorMessage(_("XHTTP is not supported by default"), true);
+      var errorDiv = createErrorMessage(_("XHTTP не поддерживается по умолчанию"), true);
       configItem.appendChild(errorDiv);
       setTimeout(function () {
         if (errorDiv.parentNode) {
@@ -1530,14 +1530,14 @@ function createUrlClickHandler(config, configItem, configList, section_id, isXht
     });
     configItem.classList.add("selected");
 
-    var loadingText = createWarningMessage(_("Applying configuration..."));
+    var loadingText = createWarningMessage(_("Применение конфигурации..."));
     configItem.appendChild(loadingText);
 
     applySelectedConfig(section_id, "url", { value: config.url }).then(function () {
       if (loadingText.parentNode) {
         loadingText.parentNode.removeChild(loadingText);
       }
-      var successDiv = createSuccessMessage(_("Configuration applied."));
+      var successDiv = createSuccessMessage(_("Конфигурация применена."));
       configItem.appendChild(successDiv);
       setTimeout(function () {
         if (successDiv.parentNode) {
@@ -1548,7 +1548,7 @@ function createUrlClickHandler(config, configItem, configList, section_id, isXht
       if (loadingText.parentNode) {
         loadingText.parentNode.removeChild(loadingText);
       }
-      var errorDiv = createErrorMessage(_("Apply failed: ") + err.message, true);
+      var errorDiv = createErrorMessage(_("Ошибка применения: ") + err.message, true);
       configItem.appendChild(errorDiv);
       setTimeout(function () {
         if (errorDiv.parentNode) {
@@ -1778,7 +1778,7 @@ function createOutboundClickHandlerEnhanced(config, configItem, configList, sect
   return function (e) {
     e.stopPropagation();
 
-    var loadingText = createWarningMessage(_("Applying configuration..."));
+    var loadingText = createWarningMessage(_("Применение конфигурации..."));
     configItem.appendChild(loadingText);
 
     var outboundData;
@@ -1814,7 +1814,7 @@ function createOutboundClickHandlerEnhanced(config, configItem, configList, sect
       if (loadingText.parentNode) {
         loadingText.parentNode.removeChild(loadingText);
       }
-      var messageNode = createSuccessMessage(_("Outbound configuration applied."));
+      var messageNode = createSuccessMessage(_("Outbound-конфигурация применена."));
       configItem.appendChild(messageNode);
       setTimeout(function () {
         if (messageNode.parentNode) {
@@ -1825,7 +1825,7 @@ function createOutboundClickHandlerEnhanced(config, configItem, configList, sect
       if (loadingText.parentNode) {
         loadingText.parentNode.removeChild(loadingText);
       }
-      var errorNode = createErrorMessage(_("Apply failed: ") + err.message, true);
+      var errorNode = createErrorMessage(_("Ошибка применения: ") + err.message, true);
       configItem.appendChild(errorNode);
       setTimeout(function () {
         if (errorNode.parentNode) {
@@ -2328,10 +2328,10 @@ function enhanceSectionWithSubscribe(section) {
       setPingCounter(section_id, finalResult.tested || finalResult.eligible || 0, finalResult.total || 0);
       updateSectionPingCache(section_id, finalResult);
       refreshConfigListFromSources(section_id, effectiveMode, ev);
-      ui.addNotification(null, E("p", {}, _("Ping test completed.")), "info");
+      ui.addNotification(null, E("p", {}, _("Пинг-тест завершен.")), "info");
     }).catch(function (err) {
       setPingCounter(section_id, 0, 0);
-      ui.addNotification(null, E("p", {}, _("Ping test failed: ") + err.message), "warning");
+      ui.addNotification(null, E("p", {}, _("Пинг-тест завершился с ошибкой: ") + err.message), "warning");
     });
 
     return false;
@@ -2353,7 +2353,7 @@ function enhanceSectionWithSubscribe(section) {
     if (ev && ev.preventDefault) ev.preventDefault();
     if (ev && ev.stopPropagation) ev.stopPropagation();
 
-    ui.addNotification(null, E("p", {}, _("Running full ping test...")), "info");
+    ui.addNotification(null, E("p", {}, _("Запуск полного пинг-теста...")), "info");
 
     runImmediatePingTestAllAsync(section_id).then(function (result) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
@@ -2362,10 +2362,10 @@ function enhanceSectionWithSubscribe(section) {
       setPingCounter(section_id, finalResult.tested || finalResult.eligible || 0, finalResult.total || 0);
       updateSectionPingCache(section_id, finalResult);
       refreshConfigListFromSources(section_id, effectiveMode, ev);
-      ui.addNotification(null, E("p", {}, _("Full ping test completed.")), "info");
+      ui.addNotification(null, E("p", {}, _("Полный пинг-тест завершен.")), "info");
     }).catch(function (err) {
       setPingCounter(section_id, 0, 0);
-      ui.addNotification(null, E("p", {}, _("Full ping test failed: ") + err.message), "warning");
+      ui.addNotification(null, E("p", {}, _("Полный пинг-тест завершился с ошибкой: ") + err.message), "warning");
     });
 
     return false;
