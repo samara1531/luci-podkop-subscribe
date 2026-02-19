@@ -1304,53 +1304,6 @@ function applySelectedConfig(section_id, mode, payload) {
   });
 }
 
-var saveApplyInProgress = false;
-
-function triggerLuCiSaveApply() {
-  if (saveApplyInProgress) return false;
-  saveApplyInProgress = true;
-
-  function isSubscribeActionButton(node) {
-    if (!node) return false;
-    var mark = ((node.id || "") + " " + (node.name || "")).toLowerCase();
-    return (
-      mark.indexOf("subscribe_run_now") !== -1 ||
-      mark.indexOf("subscribe_ping_now") !== -1 ||
-      mark.indexOf("subscribe_ping_now_all") !== -1 ||
-      mark.indexOf("subscribe_fetch") !== -1
-    );
-  }
-
-  function tryClick() {
-    var scope = document.querySelector(".cbi-page-actions");
-    if (!scope) return false;
-    var buttons = scope.querySelectorAll(
-      "button[name='cbi.apply'], input[name='cbi.apply'], button.cbi-button-apply, input.cbi-button-apply"
-    );
-    for (var i = 0; i < buttons.length; i++) {
-      var btn = buttons[i];
-      if (isSubscribeActionButton(btn)) continue;
-      if (typeof btn.click === "function") {
-        btn.click();
-        return true;
-      }
-    }
-    return false;
-  }
-
-  var clicked = tryClick();
-  if (!clicked) {
-    // LuCI may still be re-rendering controls, retry once shortly.
-    setTimeout(function () {
-      tryClick();
-    }, 250);
-  }
-  setTimeout(function () {
-    saveApplyInProgress = false;
-  }, 3000);
-  return clicked;
-}
-
 function getPingButtonElement(section_id) {
   return (
     document.getElementById("cbid.podkop." + section_id + ".subscribe_ping_now") ||
@@ -2496,7 +2449,6 @@ function enhanceSectionWithSubscribe(section) {
       var finalize = function () {
         renderImmediateAutoUpdateLog(section_id, finalResult, false, ev);
         autoLoadCachedConfigs(section_id, effectiveMode);
-        triggerLuCiSaveApply();
         ui.addNotification(null, E("p", {}, _("Auto-update completed.")), "info");
       };
 
