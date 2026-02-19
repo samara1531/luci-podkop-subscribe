@@ -6,8 +6,22 @@
 echo "Content-Type: application/json"
 echo ""
 
-read -r section_id
+read -r POST_DATA
+POST_DATA="$(printf '%s' "$POST_DATA" | tr -d '\r')"
+
+section_id=""
+ping_all="0"
+
+if printf '%s' "$POST_DATA" | grep -q '^[[:space:]]*{'; then
+    section_id="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.section_id' 2>/dev/null || true)"
+    ping_all="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.ping_all' 2>/dev/null || true)"
+else
+    section_id="$POST_DATA"
+fi
+
 section_id="$(printf '%s' "$section_id" | tr -d '\r\n')"
+ping_all="$(printf '%s' "$ping_all" | tr -d '\r\n')"
+[ "$ping_all" = "1" ] || ping_all="0"
 
 if [ -z "$section_id" ]; then
     json_init
@@ -23,7 +37,11 @@ if [ ! -x /usr/bin/podkop-subscribe-autoupdate ]; then
     exit 1
 fi
 
-run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply 2>&1)"
+if [ "$ping_all" = "1" ]; then
+    run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply --ping-all 2>&1)"
+else
+    run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply 2>&1)"
+fi
 run_rc=$?
 status_file="/tmp/podkop-subscribe-autoupdate/${section_id}.status"
 

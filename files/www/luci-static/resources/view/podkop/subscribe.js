@@ -875,11 +875,11 @@ function runImmediateAutoUpdate(section_id) {
   });
 }
 
-function runImmediatePingTest(section_id) {
+function runImmediatePingTest(section_id, pingAll) {
   return new Promise(function (resolve, reject) {
     var xhr = new XMLHttpRequest();
     xhr.open("POST", "/cgi-bin/podkop-subscribe-ping", true);
-    xhr.setRequestHeader("Content-Type", "text/plain");
+    xhr.setRequestHeader("Content-Type", "application/json");
 
     xhr.onreadystatechange = function () {
       if (xhr.readyState !== 4) return;
@@ -903,7 +903,10 @@ function runImmediatePingTest(section_id) {
       reject(new Error("Network error"));
     };
 
-    xhr.send(section_id);
+    xhr.send(JSON.stringify({
+      section_id: section_id,
+      ping_all: pingAll ? 1 : 0
+    }));
   });
 }
 
@@ -2183,7 +2186,7 @@ function enhanceSectionWithSubscribe(section) {
 
     ui.addNotification(null, E("p", {}, _("Running ping test...")), "info");
 
-    runImmediatePingTest(section_id).then(function (result) {
+    runImmediatePingTest(section_id, false).then(function (result) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
       var finalResult = result || {};
       var effectiveMode = finalResult.mode || mode;
@@ -2199,19 +2202,41 @@ function enhanceSectionWithSubscribe(section) {
     return false;
   };
 
-  // Fetch button for URL mode
   o = section.option(
-    form.Flag,
-    "subscribe_ping_all",
-    _("Ping All Configs"),
-    _("If enabled, ping checks all configs from sources (may be slower on huge lists)")
+    form.Button,
+    "subscribe_ping_now_all",
+    _("Ping Test All"),
+    _("Test latency for all configs from sources (may be slower on huge lists)")
   );
   o.depends("proxy_config_type", "url");
   o.depends("proxy_config_type", "urltest");
   o.depends("proxy_config_type", "selector");
   o.depends("proxy_config_type", "outbound");
-  o.default = "0";
-  o.rmempty = false;
+  o.inputtitle = _("Ping Test All");
+  o.inputstyle = "action";
+  o.onclick = function (ev, section_id) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+
+    ui.addNotification(null, E("p", {}, _("Running full ping test...")), "info");
+
+    runImmediatePingTest(section_id, true).then(function (result) {
+      var mode = getCurrentProxyConfigType(section_id) || "url";
+      var finalResult = result || {};
+      var effectiveMode = finalResult.mode || mode;
+      setPingCounter(section_id, finalResult.tested || finalResult.eligible || 0, finalResult.total || 0);
+      updateSectionPingCache(section_id, finalResult);
+      refreshConfigListFromSources(section_id, effectiveMode, ev);
+      ui.addNotification(null, E("p", {}, _("Full ping test completed.")), "info");
+    }).catch(function (err) {
+      setPingCounter(section_id, 0, 0);
+      ui.addNotification(null, E("p", {}, _("Full ping test failed: ") + err.message), "warning");
+    });
+
+    return false;
+  };
+
+  // Fetch button for URL mode
 
   o = section.option(
     form.Button,

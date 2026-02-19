@@ -14,6 +14,7 @@ mkdir -p "$STATE_DIR" "$TMP_ROOT"
 FORCE_MODE=0
 FORCE_SECTION=""
 NO_APPLY=0
+FORCE_PING_ALL=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --force)
@@ -23,6 +24,10 @@ while [ $# -gt 0 ]; do
             ;;
         --no-apply)
             NO_APPLY=1
+            shift
+            ;;
+        --ping-all)
+            FORCE_PING_ALL=1
             shift
             ;;
         *)
@@ -297,6 +302,7 @@ process_section() {
     blocked_urls="$(uci -q get "podkop.$section.subscribe_blocked_urls" || echo '')"
     max_items="$(uci -q get "podkop.$section.subscribe_max_configs" || echo '20')"
     ping_all="$(uci -q get "podkop.$section.subscribe_ping_all" || echo '0')"
+    [ "$FORCE_PING_ALL" -eq 1 ] && ping_all=1
     case "$max_items" in
         ''|*[!0-9]*) max_items=20 ;;
     esac
