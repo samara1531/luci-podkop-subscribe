@@ -12,6 +12,28 @@ POST_DATA="$(printf '%s' "$POST_DATA" | tr -d '\r')"
 section_id=""
 blocked_urls=""
 blocked_urls_provided="0"
+sources_provided="0"
+source_urls_joined=""
+manual_links_joined=""
+
+extract_json_array_items() {
+    key="$1"
+    sep="${2:-|}"
+    out=""
+    i=0
+    while :; do
+        item="$(printf '%s' "$POST_DATA" | jsonfilter -e "@.${key}[$i]" 2>/dev/null || true)"
+        [ -z "$item" ] && break
+        item="$(printf '%s' "$item" | tr -d '\r\n')"
+        if [ -z "$out" ]; then
+            out="$item"
+        else
+            out="${out}${sep}${item}"
+        fi
+        i=$((i + 1))
+    done
+    printf '%s' "$out"
+}
 
 if printf '%s' "$POST_DATA" | grep -q '^[[:space:]]*{'; then
     section_id="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.section_id' 2>/dev/null || true)"
@@ -20,6 +42,13 @@ if printf '%s' "$POST_DATA" | grep -q '^[[:space:]]*{'; then
     [ "$blocked_urls_provided" = "1" ] || blocked_urls_provided="0"
     if [ "$blocked_urls_provided" != "1" ] && [ -n "$blocked_urls" ]; then
         blocked_urls_provided="1"
+    fi
+    sources_provided="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.sources_provided' 2>/dev/null || true)"
+    [ "$sources_provided" = "1" ] || sources_provided="0"
+    source_urls_joined="$(extract_json_array_items 'source_urls')"
+    manual_links_joined="$(extract_json_array_items 'manual_links')"
+    if [ "$sources_provided" != "1" ] && { [ -n "$source_urls_joined" ] || [ -n "$manual_links_joined" ]; }; then
+        sources_provided="1"
     fi
 else
     section_id="$POST_DATA"
@@ -42,7 +71,7 @@ if [ ! -x /usr/bin/podkop-subscribe-autoupdate ]; then
     exit 1
 fi
 
-run_log="$(PODKOP_BLOCKED_URLS="$blocked_urls" PODKOP_BLOCKED_URLS_PROVIDED="$blocked_urls_provided" /usr/bin/podkop-subscribe-autoupdate --force "$section_id" 2>&1)"
+run_log="$(PODKOP_BLOCKED_URLS="$blocked_urls" PODKOP_BLOCKED_URLS_PROVIDED="$blocked_urls_provided" PODKOP_SOURCE_URLS="$source_urls_joined" PODKOP_MANUAL_LINKS="$manual_links_joined" PODKOP_SOURCES_PROVIDED="$sources_provided" /usr/bin/podkop-subscribe-autoupdate --force "$section_id" 2>&1)"
 run_rc=$?
 status_file="/tmp/podkop-subscribe-autoupdate/${section_id}.status"
 

@@ -1030,7 +1030,21 @@ function runImmediateAutoUpdate(section_id) {
       reject(new Error("Сетевая ошибка"));
     };
 
-    var payload = { section_id: section_id, blocked_urls_provided: 0 };
+    var currentMode = getCurrentProxyConfigType(section_id) || "url";
+    var isOutbound = currentMode === "outbound";
+    var sources = buildSubscribeSources(section_id, isOutbound);
+    var payload = {
+      section_id: section_id,
+      blocked_urls_provided: 0,
+      sources_provided: 0
+    };
+
+    if (sources && (Array.isArray(sources.subscribe_urls) || Array.isArray(sources.manual_links))) {
+      payload.source_urls = Array.isArray(sources.subscribe_urls) ? sources.subscribe_urls : [];
+      payload.manual_links = Array.isArray(sources.manual_links) ? sources.manual_links : [];
+      payload.sources_provided = 1;
+    }
+
     var blockedRawFromInput = readBlockedUrlsRawInput(section_id);
     if (blockedRawFromInput) {
       payload.blocked_urls = blockedRawFromInput;

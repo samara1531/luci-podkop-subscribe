@@ -17,6 +17,9 @@ NO_APPLY=0
 FORCE_PING_ALL=0
 FORCE_BLOCKED_URLS="${PODKOP_BLOCKED_URLS:-}"
 FORCE_BLOCKED_URLS_PROVIDED="${PODKOP_BLOCKED_URLS_PROVIDED:-0}"
+FORCE_SOURCE_URLS="${PODKOP_SOURCE_URLS:-}"
+FORCE_MANUAL_LINKS="${PODKOP_MANUAL_LINKS:-}"
+FORCE_SOURCES_PROVIDED="${PODKOP_SOURCES_PROVIDED:-0}"
 while [ $# -gt 0 ]; do
     case "$1" in
         --force)
@@ -460,9 +463,17 @@ process_section() {
     build_blocked_titles_file "$blocked_urls" "$blocked_titles_file"
     build_blocked_url_keys_file "$blocked_urls" "$blocked_keys_file"
 
-    [ -n "$primary_url" ] && printf '%s\n' "$primary_url" >> "$source_urls_file"
-    uci_list_values "$section" "$extra_option" >> "$source_urls_file" 2>/dev/null || true
-    manual_sources="$(uci_list_values "$section" "subscribe_manual_links" || true)"
+    if [ "$FORCE_MODE" -eq 1 ] && [ -n "$FORCE_SECTION" ] && [ "$section" = "$FORCE_SECTION" ] && [ "$FORCE_SOURCES_PROVIDED" = "1" ]; then
+        if [ -n "$FORCE_SOURCE_URLS" ]; then
+            printf '%s' "$FORCE_SOURCE_URLS" | tr '|' '\n' >> "$source_urls_file"
+        fi
+        manual_sources="$(printf '%s' "$FORCE_MANUAL_LINKS" | tr '|' '\n')"
+        manual_sources="$(printf '%s' "$manual_sources" | sed '/^[[:space:]]*$/d')"
+    else
+        [ -n "$primary_url" ] && printf '%s\n' "$primary_url" >> "$source_urls_file"
+        uci_list_values "$section" "$extra_option" >> "$source_urls_file" 2>/dev/null || true
+        manual_sources="$(uci_list_values "$section" "subscribe_manual_links" || true)"
+    fi
 
     if [ ! -s "$source_urls_file" ] && [ -z "$manual_sources" ]; then
         rm -f "$lines_file" "$ranked_file" "$source_urls_file" "$dedup_file"
@@ -473,7 +484,29 @@ process_section() {
 
     # Append manual links first so they are not dropped by Max Configs cap.
     manual_any=0
-    if append_manual_lines "$section" "$lines_file"; then
+    if [ "$FORCE_MODE" -eq 1 ] && [ -n "$FORCE_SECTION" ] && [ "$section" = "$FORCE_SECTION" ] && [ "$FORCE_SOURCES_PROVIDED" = "1" ]; then
+        if [ -n "$manual_sources" ]; then
+            idx=$(( $(wc -l < "$lines_file" 2>/dev/null || echo 0) + 1 ))
+            manual_total=0
+            manual_supported=0
+            while IFS= read -r line || [ -n "$line" ]; do
+                clean="$(printf '%s' "$line" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+                [ -z "$clean" ] && continue
+                manual_total=$((manual_total + 1))
+                if is_supported_proxy_url "$clean"; then
+                    title="$(extract_title "$clean" "Manual $idx")"
+                    printf '%s\t%s\n' "$clean" "$title" >> "$lines_file"
+                    idx=$((idx + 1))
+                    manual_supported=$((manual_supported + 1))
+                    manual_any=1
+                fi
+            done <<EOF
+$manual_sources
+EOF
+            MANUAL_TOTAL="$manual_total"
+            MANUAL_SUPPORTED="$manual_supported"
+        fi
+    elif append_manual_lines "$section" "$lines_file"; then
         manual_any=1
     fi
 
