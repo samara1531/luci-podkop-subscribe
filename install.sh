@@ -1,4 +1,4 @@
-﻿#!/bin/sh
+#!/bin/sh
 # Installation script for luci-podkop-subscribe (sing-box oriented)
 
 set -e

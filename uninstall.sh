@@ -1,4 +1,4 @@
-﻿#!/bin/sh
+#!/bin/sh
 # Uninstallation script for luci-app-podkop-subscribe
 
 set +e
