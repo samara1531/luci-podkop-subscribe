@@ -1547,8 +1547,9 @@ function enhanceSectionWithSubscribe(section) {
     runImmediateAutoUpdate(section_id).then(function (result) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
       var finalResult = result || {};
+      var effectiveMode = finalResult.mode || mode;
 
-      if (mode === "outbound" && finalResult.best_url) {
+      if (effectiveMode === "outbound" && finalResult.best_url) {
         try {
           var outboundData = parseVlessConfigUrl(finalResult.best_url);
           setOutboundTextareaValue(section_id, outboundData);
@@ -1560,7 +1561,7 @@ function enhanceSectionWithSubscribe(section) {
         }
       }
 
-      autoLoadCachedConfigs(section_id, mode);
+      autoLoadCachedConfigs(section_id, effectiveMode);
       renderImmediateAutoUpdateLog(section_id, finalResult, false, ev);
       ui.addNotification(null, E("p", {}, _("Auto-update completed.")), "info");
     }).catch(function (err) {
