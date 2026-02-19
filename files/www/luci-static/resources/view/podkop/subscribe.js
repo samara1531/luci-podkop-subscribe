@@ -323,6 +323,7 @@ function injectSubscribeStyles() {
 
 var sectionPingCache = {};
 var sectionBlockedUrlsCache = {};
+var sectionBlockedUrlsTouched = {};
 
 function normalizePingTitle(title) {
   return String(title || "")
@@ -970,6 +971,7 @@ function getBlockedUrls(section_id) {
 function setBlockedUrls(section_id, urls) {
   var normalized = normalizeBlockedUrls(urls);
   sectionBlockedUrlsCache[section_id] = normalized;
+  sectionBlockedUrlsTouched[section_id] = true;
   var input = getFieldInput(section_id, "subscribe_blocked_urls");
   if (!input) return;
   input.value = serializeBlockedUrls(normalized);
@@ -1028,11 +1030,19 @@ function runImmediateAutoUpdate(section_id) {
       reject(new Error("Сетевая ошибка"));
     };
 
-    var blockedUrls = getBlockedUrls(section_id);
-    xhr.send(JSON.stringify({
-      section_id: section_id,
-      blocked_urls: serializeBlockedUrls(blockedUrls)
-    }));
+    var payload = { section_id: section_id, blocked_urls_provided: 0 };
+    var blockedRawFromInput = readBlockedUrlsRawInput(section_id);
+    if (blockedRawFromInput) {
+      payload.blocked_urls = blockedRawFromInput;
+      payload.blocked_urls_provided = 1;
+    } else {
+      var blockedUrls = normalizeBlockedUrls(sectionBlockedUrlsCache[section_id] || []);
+      if (blockedUrls.length > 0 || sectionBlockedUrlsTouched[section_id]) {
+        payload.blocked_urls = serializeBlockedUrls(blockedUrls);
+        payload.blocked_urls_provided = 1;
+      }
+    }
+    xhr.send(JSON.stringify(payload));
   });
 }
 

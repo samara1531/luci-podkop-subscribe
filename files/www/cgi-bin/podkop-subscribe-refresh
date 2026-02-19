@@ -16,7 +16,11 @@ blocked_urls_provided="0"
 if printf '%s' "$POST_DATA" | grep -q '^[[:space:]]*{'; then
     section_id="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.section_id' 2>/dev/null || true)"
     blocked_urls="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.blocked_urls' 2>/dev/null || true)"
-    blocked_urls_provided="1"
+    blocked_urls_provided="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.blocked_urls_provided' 2>/dev/null || true)"
+    [ "$blocked_urls_provided" = "1" ] || blocked_urls_provided="0"
+    if [ "$blocked_urls_provided" != "1" ] && [ -n "$blocked_urls" ]; then
+        blocked_urls_provided="1"
+    fi
 else
     section_id="$POST_DATA"
 fi
