@@ -353,10 +353,11 @@ process_section() {
         rank_idx=0
         while IFS="$(printf '\t')" read -r lat url title; do
             rank_idx=$((rank_idx + 1))
-            [ "$rank_idx" -gt 50 ] && break
+            [ "$rank_idx" -gt 500 ] && break
             printf 'top%s_title=%s\n' "$rank_idx" "$(sanitize_status_value "$title")" >> "$status_file"
             printf 'top%s_ping=%s\n' "$rank_idx" "$lat" >> "$status_file"
             printf 'top%s_url=%s\n' "$rank_idx" "$url" >> "$status_file"
+            printf 'top%s_host=%s\n' "$rank_idx" "$(extract_host "$url")" >> "$status_file"
         done < "$ranked_file"
     fi
 

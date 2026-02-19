@@ -221,6 +221,33 @@ function normalizePingTitle(title) {
     .trim();
 }
 
+function normalizePingHost(host) {
+  return String(host || "")
+    .toLowerCase()
+    .replace(/^\[/, "")
+    .replace(/\]$/, "")
+    .trim();
+}
+
+function extractHostFromConfigUrl(url) {
+  if (!url || typeof url !== "string") return "";
+  var core = url;
+  var protoIdx = core.indexOf("://");
+  if (protoIdx >= 0) core = core.substring(protoIdx + 3);
+  var atIdx = core.lastIndexOf("@");
+  if (atIdx >= 0) core = core.substring(atIdx + 1);
+  var qIdx = core.search(/[/?#]/);
+  if (qIdx >= 0) core = core.substring(0, qIdx);
+  if (!core) return "";
+  if (core[0] === "[") {
+    var end = core.indexOf("]");
+    if (end > 0) return normalizePingHost(core.substring(1, end));
+  }
+  var colon = core.lastIndexOf(":");
+  if (colon > 0) core = core.substring(0, colon);
+  return normalizePingHost(core);
+}
+
 // Remove config lists when connection type or proxy_config_type changes
 function removeConfigLists() {
   // Find all config lists by ID prefix pattern and remove them from DOM
@@ -567,16 +594,20 @@ function updateSectionPingCache(section_id, result) {
   if (!result) return;
   var byUrl = {};
   var byTitle = {};
-  for (var i = 1; i <= 50; i++) {
+  var byHost = {};
+  for (var i = 1; i <= 500; i++) {
     var url = result["top" + i + "_url"];
     var ping = result["top" + i + "_ping"];
     var title = result["top" + i + "_title"];
+    var host = result["top" + i + "_host"];
     if (url) byUrl[url] = ping;
     if (title) byTitle[normalizePingTitle(title)] = ping;
+    if (host) byHost[normalizePingHost(host)] = ping;
   }
   sectionPingCache[section_id] = {
     byUrl: byUrl,
-    byTitle: byTitle
+    byTitle: byTitle,
+    byHost: byHost
   };
 }
 
@@ -941,9 +972,13 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
     var pingCache = sectionPingCache[section_id] || {};
     var pingByUrl = pingCache.byUrl || {};
     var pingByTitle = pingCache.byTitle || {};
+    var pingByHost = pingCache.byHost || {};
     var pingValue = pingByUrl[config.url];
     if (pingValue == null || pingValue === "") {
       pingValue = pingByTitle[normalizePingTitle(config.title)];
+    }
+    if (pingValue == null || pingValue === "") {
+      pingValue = pingByHost[extractHostFromConfigUrl(config.url)];
     }
     if (pingValue != null && pingValue !== "") {
       pingLabel.textContent = String(pingValue) === "999999" ? "timeout" : (pingValue + " ms");
