@@ -12,17 +12,55 @@ POST_DATA="$(printf '%s' "$POST_DATA" | tr -d '\r')"
 section_id=""
 ping_all="0"
 action="run"
+blocked_urls=""
+blocked_urls_provided="0"
+sources_provided="0"
+source_urls_joined=""
+manual_links_joined=""
+
+extract_json_array_items() {
+    key="$1"
+    sep="${2:-|}"
+    out=""
+    i=0
+    while :; do
+        item="$(printf '%s' "$POST_DATA" | jsonfilter -e "@.${key}[$i]" 2>/dev/null || true)"
+        [ -z "$item" ] && break
+        item="$(printf '%s' "$item" | tr -d '\r\n')"
+        if [ -z "$out" ]; then
+            out="$item"
+        else
+            out="${out}${sep}${item}"
+        fi
+        i=$((i + 1))
+    done
+    printf '%s' "$out"
+}
 
 if printf '%s' "$POST_DATA" | grep -q '^[[:space:]]*{'; then
     section_id="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.section_id' 2>/dev/null || true)"
     ping_all="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.ping_all' 2>/dev/null || true)"
     action="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.action' 2>/dev/null || true)"
+    blocked_urls="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.blocked_urls' 2>/dev/null || true)"
+    blocked_urls_provided="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.blocked_urls_provided' 2>/dev/null || true)"
+    [ "$blocked_urls_provided" = "1" ] || blocked_urls_provided="0"
+    if [ "$blocked_urls_provided" != "1" ] && [ -n "$blocked_urls" ]; then
+        blocked_urls_provided="1"
+    fi
+    sources_provided="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.sources_provided' 2>/dev/null || true)"
+    [ "$sources_provided" = "1" ] || sources_provided="0"
+    source_urls_joined="$(extract_json_array_items 'source_urls')"
+    manual_links_joined="$(extract_json_array_items 'manual_links')"
+    if [ "$sources_provided" != "1" ] && { [ -n "$source_urls_joined" ] || [ -n "$manual_links_joined" ]; }; then
+        sources_provided="1"
+    fi
 else
     section_id="$POST_DATA"
 fi
 
 section_id="$(printf '%s' "$section_id" | tr -d '\r\n')"
 ping_all="$(printf '%s' "$ping_all" | tr -d '\r\n')"
+[ -n "$blocked_urls" ] && blocked_urls="$(printf '%s' "$blocked_urls" | tr -d '\r\n')"
 [ "$ping_all" = "1" ] || ping_all="0"
 [ -z "$action" ] && action="run"
 
@@ -102,7 +140,7 @@ if [ "$action" = "start" ]; then
 
     rm -f "$done_file" "$log_file"
     (
-        /usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply --ping-all >"$log_file" 2>&1
+        PODKOP_BLOCKED_URLS="$blocked_urls" PODKOP_BLOCKED_URLS_PROVIDED="$blocked_urls_provided" PODKOP_SOURCE_URLS="$source_urls_joined" PODKOP_MANUAL_LINKS="$manual_links_joined" PODKOP_SOURCES_PROVIDED="$sources_provided" /usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply --ping-all >"$log_file" 2>&1
         rc=$?
         echo "$rc" > "$done_file"
         rm -f "$pid_file"
@@ -114,9 +152,9 @@ if [ "$action" = "start" ]; then
 fi
 
 if [ "$ping_all" = "1" ]; then
-    run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply --ping-all 2>&1)"
+    run_log="$(PODKOP_BLOCKED_URLS="$blocked_urls" PODKOP_BLOCKED_URLS_PROVIDED="$blocked_urls_provided" PODKOP_SOURCE_URLS="$source_urls_joined" PODKOP_MANUAL_LINKS="$manual_links_joined" PODKOP_SOURCES_PROVIDED="$sources_provided" /usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply --ping-all 2>&1)"
 else
-    run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply 2>&1)"
+    run_log="$(PODKOP_BLOCKED_URLS="$blocked_urls" PODKOP_BLOCKED_URLS_PROVIDED="$blocked_urls_provided" PODKOP_SOURCE_URLS="$source_urls_joined" PODKOP_MANUAL_LINKS="$manual_links_joined" PODKOP_SOURCES_PROVIDED="$sources_provided" /usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply 2>&1)"
 fi
 run_rc=$?
 

@@ -1030,34 +1030,39 @@ function runImmediateAutoUpdate(section_id) {
       reject(new Error("Сетевая ошибка"));
     };
 
-    var currentMode = getCurrentProxyConfigType(section_id) || "url";
-    var isOutbound = currentMode === "outbound";
-    var sources = buildSubscribeSources(section_id, isOutbound);
-    var payload = {
-      section_id: section_id,
-      blocked_urls_provided: 0,
-      sources_provided: 0
-    };
-
-    if (sources && (Array.isArray(sources.subscribe_urls) || Array.isArray(sources.manual_links))) {
-      payload.source_urls = Array.isArray(sources.subscribe_urls) ? sources.subscribe_urls : [];
-      payload.manual_links = Array.isArray(sources.manual_links) ? sources.manual_links : [];
-      payload.sources_provided = 1;
-    }
-
-    var blockedRawFromInput = readBlockedUrlsRawInput(section_id);
-    if (blockedRawFromInput) {
-      payload.blocked_urls = blockedRawFromInput;
-      payload.blocked_urls_provided = 1;
-    } else {
-      var blockedUrls = normalizeBlockedUrls(sectionBlockedUrlsCache[section_id] || []);
-      if (blockedUrls.length > 0 || sectionBlockedUrlsTouched[section_id]) {
-        payload.blocked_urls = serializeBlockedUrls(blockedUrls);
-        payload.blocked_urls_provided = 1;
-      }
-    }
-    xhr.send(JSON.stringify(payload));
+    xhr.send(JSON.stringify(buildLiveRunPayload(section_id, {
+      section_id: section_id
+    })));
   });
+}
+
+function buildLiveRunPayload(section_id, payload) {
+  var out = payload && typeof payload === "object" ? payload : {};
+  out.blocked_urls_provided = 0;
+  out.sources_provided = 0;
+
+  var currentMode = getCurrentProxyConfigType(section_id) || "url";
+  var isOutbound = currentMode === "outbound";
+  var sources = buildSubscribeSources(section_id, isOutbound);
+  if (sources && (Array.isArray(sources.subscribe_urls) || Array.isArray(sources.manual_links))) {
+    out.source_urls = Array.isArray(sources.subscribe_urls) ? sources.subscribe_urls : [];
+    out.manual_links = Array.isArray(sources.manual_links) ? sources.manual_links : [];
+    out.sources_provided = 1;
+  }
+
+  var blockedRawFromInput = readBlockedUrlsRawInput(section_id);
+  if (blockedRawFromInput) {
+    out.blocked_urls = blockedRawFromInput;
+    out.blocked_urls_provided = 1;
+  } else {
+    var blockedUrls = normalizeBlockedUrls(sectionBlockedUrlsCache[section_id] || []);
+    if (blockedUrls.length > 0 || sectionBlockedUrlsTouched[section_id]) {
+      out.blocked_urls = serializeBlockedUrls(blockedUrls);
+      out.blocked_urls_provided = 1;
+    }
+  }
+
+  return out;
 }
 
 function requestPingApi(payload) {
@@ -1093,20 +1098,20 @@ function requestPingApi(payload) {
 }
 
 function runImmediatePingTest(section_id, pingAll) {
-  return requestPingApi({
+  return requestPingApi(buildLiveRunPayload(section_id, {
     section_id: section_id,
     ping_all: pingAll ? 1 : 0,
     action: "run"
-  });
+  }));
 }
 
 function runImmediatePingTestAllAsync(section_id) {
   return new Promise(function (resolve, reject) {
-    requestPingApi({
+    requestPingApi(buildLiveRunPayload(section_id, {
       section_id: section_id,
       ping_all: 1,
       action: "start"
-    }).then(function () {
+    })).then(function () {
       var startedAt = Date.now();
 
       function poll() {
@@ -1317,29 +1322,18 @@ function triggerLuCiSaveApply() {
   }
 
   function tryClick() {
-    var actionScopes = [
-      document.querySelector(".cbi-page-actions"),
-      document.querySelector(".cbi-map")
-    ];
-    for (var s = 0; s < actionScopes.length; s++) {
-      var scope = actionScopes[s];
-      if (!scope) continue;
-      var buttons = scope.querySelectorAll(
-        "button.cbi-button-apply, input.cbi-button-apply, button[name='cbi.apply'], input[name='cbi.apply']"
-      );
-      for (var i = 0; i < buttons.length; i++) {
-        var btn = buttons[i];
-        if (isSubscribeActionButton(btn)) continue;
-        if (typeof btn.click === "function") {
-          btn.click();
-          return true;
-        }
+    var scope = document.querySelector(".cbi-page-actions");
+    if (!scope) return false;
+    var buttons = scope.querySelectorAll(
+      "button[name='cbi.apply'], input[name='cbi.apply'], button.cbi-button-apply, input.cbi-button-apply"
+    );
+    for (var i = 0; i < buttons.length; i++) {
+      var btn = buttons[i];
+      if (isSubscribeActionButton(btn)) continue;
+      if (typeof btn.click === "function") {
+        btn.click();
+        return true;
       }
-    }
-    var formNode = document.querySelector("form.cbi-map, form");
-    if (formNode && typeof formNode.submit === "function") {
-      formNode.submit();
-      return true;
     }
     return false;
   }
