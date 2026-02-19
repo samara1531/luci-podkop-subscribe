@@ -1285,6 +1285,41 @@ function applySelectedConfig(section_id, mode, payload) {
   });
 }
 
+var saveApplyInProgress = false;
+
+function triggerLuCiSaveApply() {
+  if (saveApplyInProgress) return false;
+  saveApplyInProgress = true;
+
+  function tryClick() {
+    var btn = document.querySelector(
+      "button.cbi-button-apply, input.cbi-button-apply, button[name='cbi.apply'], input[name='cbi.apply']"
+    );
+    if (btn && typeof btn.click === "function") {
+      btn.click();
+      return true;
+    }
+    var formNode = document.querySelector("form.cbi-map, form");
+    if (formNode && typeof formNode.submit === "function") {
+      formNode.submit();
+      return true;
+    }
+    return false;
+  }
+
+  var clicked = tryClick();
+  if (!clicked) {
+    // LuCI may still be re-rendering controls, retry once shortly.
+    setTimeout(function () {
+      tryClick();
+    }, 250);
+  }
+  setTimeout(function () {
+    saveApplyInProgress = false;
+  }, 3000);
+  return clicked;
+}
+
 function getPingButtonElement(section_id) {
   return (
     document.getElementById("cbid.podkop." + section_id + ".subscribe_ping_now") ||
@@ -2430,6 +2465,7 @@ function enhanceSectionWithSubscribe(section) {
       var finalize = function () {
         renderImmediateAutoUpdateLog(section_id, finalResult, false, ev);
         autoLoadCachedConfigs(section_id, effectiveMode);
+        triggerLuCiSaveApply();
         ui.addNotification(null, E("p", {}, _("Auto-update completed.")), "info");
       };
 
