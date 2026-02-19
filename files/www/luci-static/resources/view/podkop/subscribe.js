@@ -625,10 +625,11 @@ function getDynamicListValues(section_id, fieldName) {
   var baseId = "cbid.podkop." + section_id + "." + fieldName;
   var values = [];
   var seen = {};
-  var hiddenInputs = document.querySelectorAll('input[type="hidden"][name="' + baseId + '"]');
-  hiddenInputs.forEach(function(input) {
+  var inputs = document.querySelectorAll('input[name="' + baseId + '"]');
+  inputs.forEach(function(input) {
     var value = (input.value || "").trim();
-    if (!value || seen[value]) return;
+    if (!value) return;
+    if (seen[value]) return;
     seen[value] = true;
     values.push(value);
   });
