@@ -405,9 +405,47 @@
     }, 2000);
   }
 
+  function parseRgbColor(value) {
+    if (!value || typeof value !== "string") return null;
+    var match = value.match(/^rgba?\(([^)]+)\)$/i);
+    if (!match) return null;
+    var parts = match[1].split(",").map(function(part) {
+      return parseFloat(String(part).trim());
+    });
+    if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
+      return null;
+    }
+    return [parts[0], parts[1], parts[2]];
+  }
+
+  function isDarkThemeActive() {
+    var target = document.body || document.documentElement;
+    if (!target || !window.getComputedStyle) return false;
+    var rgb = parseRgbColor(window.getComputedStyle(target).backgroundColor);
+    if (!rgb) return false;
+    var luma = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
+    return luma < 140;
+  }
+
+  function getThemeFallbackPalette() {
+    if (isDarkThemeActive()) {
+      return {
+        border: "rgba(255, 255, 255, 0.16)",
+        surface: "rgba(255, 255, 255, 0.06)",
+        surfaceAlt: "rgba(255, 255, 255, 0.04)"
+      };
+    }
+    return {
+      border: "rgba(0, 0, 0, 0.16)",
+      surface: "rgba(0, 0, 0, 0.03)",
+      surfaceAlt: "rgba(0, 0, 0, 0.02)"
+    };
+  }
+
   // Inject default styles
   function injectDefaultStyles() {
     if (document.getElementById("podkop-subscribe-styles")) return;
+    var themeFallbacks = getThemeFallbackPalette();
 
     var style = document.createElement("style");
     style.id = "podkop-subscribe-styles";
@@ -444,18 +482,18 @@
       "  max-height: 300px;",
       "  overflow-y: auto;",
       "  padding: 15px;",
-      "  border: 1px solid var(--background-color-low, #ddd);",
+      "  border: 1px solid var(--background-color-low, " + themeFallbacks.border + ");",
       "  border-radius: 4px;",
-      "  background: var(--background-color-high, #f9f9f9);",
+      "  background: var(--background-color-high, " + themeFallbacks.surfaceAlt + ");",
       "}",
       ".podkop-subscribe-item {",
       "  margin: 8px 0;",
       "  padding: 10px;",
-      "  border: 1px solid var(--background-color-low, #ccc);",
+      "  border: 1px solid var(--background-color-low, " + themeFallbacks.border + ");",
       "  border-radius: 4px;",
       "  cursor: pointer;",
       "  transition: all 0.2s ease;",
-      "  background: var(--background-color-high, white);",
+      "  background: var(--background-color-high, " + themeFallbacks.surface + ");",
       "}",
       ".podkop-subscribe-item:hover {",
       "  background: var(--primary-color-low, #e8f4f8);",
@@ -469,6 +507,7 @@
       "  font-weight: bold;",
       "  margin-bottom: 3px;",
       "  font-size: 13px;",
+      "  color: var(--text-color-high, inherit);",
       "}",
       ".podkop-subscribe-item-protocol {",
       "  display: inline-block;",

@@ -6,9 +6,50 @@
 "require baseclass";
 "require view.podkop.main as main";
 
+function parseRgbColor(value) {
+  if (!value || typeof value !== "string") return null;
+  var match = value.match(/^rgba?\(([^)]+)\)$/i);
+  if (!match) return null;
+  var parts = match[1].split(",").map(function(part) {
+    return parseFloat(String(part).trim());
+  });
+  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
+    return null;
+  }
+  return [parts[0], parts[1], parts[2]];
+}
+
+function isDarkThemeActive() {
+  var target = document.body || document.documentElement;
+  if (!target || !window.getComputedStyle) return false;
+  var rgb = parseRgbColor(window.getComputedStyle(target).backgroundColor);
+  if (!rgb) return false;
+  var luma = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
+  return luma < 140;
+}
+
+function getThemeFallbackPalette() {
+  if (isDarkThemeActive()) {
+    return {
+      border: "rgba(255, 255, 255, 0.16)",
+      surface: "rgba(255, 255, 255, 0.06)",
+      surfaceAlt: "rgba(255, 255, 255, 0.04)",
+      muted: "rgba(255, 255, 255, 0.12)"
+    };
+  }
+
+  return {
+    border: "rgba(0, 0, 0, 0.16)",
+    surface: "rgba(0, 0, 0, 0.03)",
+    surfaceAlt: "rgba(0, 0, 0, 0.02)",
+    muted: "rgba(0, 0, 0, 0.09)"
+  };
+}
+
 // Inject CSS styles for theming support
 function injectSubscribeStyles() {
   if (document.getElementById("podkop-subscribe-styles")) return;
+  var themeFallbacks = getThemeFallbackPalette();
 
   var style = document.createElement("style");
   style.id = "podkop-subscribe-styles";
@@ -70,9 +111,9 @@ function injectSubscribeStyles() {
       font-size: 12px;
     }
     .podkop-subscribe-sort-btn {
-      border: 1px solid var(--background-color-low, #999);
+      border: 1px solid var(--background-color-low, ${themeFallbacks.border});
       border-radius: 4px;
-      background: var(--background-color-high, #fff);
+      background: var(--background-color-high, ${themeFallbacks.surface});
       color: var(--text-color-high, inherit);
       padding: 3px 8px;
       cursor: pointer;
@@ -91,18 +132,18 @@ function injectSubscribeStyles() {
       max-height: 300px;
       overflow-y: auto;
       padding: 15px;
-      border: 1px solid var(--background-color-low, #ddd);
+      border: 1px solid var(--background-color-low, ${themeFallbacks.border});
       border-radius: 4px;
-      background: var(--background-color-high, #f9f9f9);
+      background: var(--background-color-high, ${themeFallbacks.surfaceAlt});
     }
     .podkop-subscribe-item {
       margin: 8px 0;
       padding: 10px;
-      border: 1px solid var(--background-color-low, #ccc);
+      border: 1px solid var(--background-color-low, ${themeFallbacks.border});
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.2s ease;
-      background: var(--background-color-high, white);
+      background: var(--background-color-high, ${themeFallbacks.surface});
     }
     .podkop-subscribe-item:hover {
       background: var(--primary-color-low, #e8f4f8);
@@ -136,7 +177,7 @@ function injectSubscribeStyles() {
       font-size: 12px;
       padding: 2px 6px;
       border-radius: 10px;
-      background: var(--background-color-low, #e5e5e5);
+      background: var(--background-color-low, ${themeFallbacks.muted});
       white-space: nowrap;
     }
     .podkop-subscribe-ping.bad {
@@ -144,12 +185,13 @@ function injectSubscribeStyles() {
       color: #fff;
     }
     .podkop-subscribe-btn {
-      border: 1px solid var(--background-color-low, #999);
+      border: 1px solid var(--background-color-low, ${themeFallbacks.border});
       border-radius: 4px;
       padding: 3px 8px;
       font-size: 12px;
       cursor: pointer;
-      background: var(--background-color-high, #fff);
+      background: var(--background-color-high, ${themeFallbacks.surface});
+      color: var(--text-color-high, inherit);
     }
     .podkop-subscribe-btn.apply {
       border-color: var(--primary-color-high, #2196f3);
@@ -237,7 +279,7 @@ function injectSubscribeStyles() {
       display: inline-block;
       margin-left: 8px;
       padding: 2px 8px;
-      background: var(--background-color-low, #e5e5e5);
+      background: var(--background-color-low, ${themeFallbacks.muted});
       border-radius: 10px;
       font-size: 12px;
       color: var(--text-color-high, inherit);
