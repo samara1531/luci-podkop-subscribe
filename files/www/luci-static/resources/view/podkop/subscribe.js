@@ -295,6 +295,61 @@ function isAlivePingValue(pingValue) {
   return !isNaN(n) && n > 0 && n < 999999;
 }
 
+function detectProtocolFromProxyUrl(url) {
+  if (!url || typeof url !== "string") return "";
+  if (/^vless:\/\//i.test(url)) return "vless";
+  if (/^ss:\/\//i.test(url)) return "ss";
+  if (/^trojan:\/\//i.test(url)) return "trojan";
+  if (/^(hy2|hysteria2):\/\//i.test(url)) return "hy2";
+  if (/^(socks|socks4|socks5):\/\//i.test(url)) return "socks";
+  return "";
+}
+
+function extractTitleFromProxyUrl(url, fallback) {
+  if (!url || typeof url !== "string") return fallback || "Config";
+  var hashIndex = url.indexOf("#");
+  if (hashIndex < 0 || hashIndex + 1 >= url.length) return fallback || "Config";
+  return decodeComponent(url.substring(hashIndex + 1)) || fallback || "Config";
+}
+
+function buildManualConfigs(manualLinks) {
+  var list = Array.isArray(manualLinks) ? manualLinks : [];
+  var out = [];
+  for (var i = 0; i < list.length; i++) {
+    var url = String(list[i] || "").trim();
+    if (!url) continue;
+    var protocol = detectProtocolFromProxyUrl(url);
+    if (!protocol) continue;
+    out.push({
+      url: url,
+      title: extractTitleFromProxyUrl(url, _("Manual Config") + " " + (out.length + 1)),
+      protocol: protocol
+    });
+  }
+  return out;
+}
+
+function mergeConfigsWithManual(configs, manualLinks) {
+  var merged = [];
+  var seen = {};
+
+  function add(item) {
+    if (!item || !item.url) return;
+    var url = String(item.url).trim();
+    if (!url || seen[url]) return;
+    seen[url] = true;
+    merged.push({
+      url: url,
+      title: item.title || extractTitleFromProxyUrl(url, _("Config")),
+      protocol: item.protocol || detectProtocolFromProxyUrl(url) || ""
+    });
+  }
+
+  (Array.isArray(configs) ? configs : []).forEach(add);
+  buildManualConfigs(manualLinks).forEach(add);
+  return merged;
+}
+
 // Remove config lists when connection type or proxy_config_type changes
 function removeConfigLists() {
   // Find all config lists by ID prefix pattern and remove them from DOM
@@ -625,14 +680,45 @@ function getDynamicListValues(section_id, fieldName) {
   var baseId = "cbid.podkop." + section_id + "." + fieldName;
   var values = [];
   var seen = {};
-  var inputs = document.querySelectorAll('input[name="' + baseId + '"]');
-  inputs.forEach(function(input) {
-    var value = (input.value || "").trim();
-    if (!value) return;
-    if (seen[value]) return;
-    seen[value] = true;
-    values.push(value);
-  });
+
+  function pushValue(value) {
+    var v = (value || "").trim();
+    if (!v || seen[v]) return;
+    seen[v] = true;
+    values.push(v);
+  }
+
+  function pushFromElement(el) {
+    if (!el) return;
+    var raw = (el.value || "").trim();
+    if (!raw) return;
+    if (el.tagName === "TEXTAREA") {
+      raw.split(/\r?\n/).forEach(function(line) {
+        pushValue(line);
+      });
+      return;
+    }
+    pushValue(raw);
+  }
+
+  var namedElements = document.querySelectorAll(
+    '[name="' + baseId + '"], [name^="' + baseId + '."], [name^="' + baseId + '["]'
+  );
+  namedElements.forEach(pushFromElement);
+
+  // DynamicList often keeps the currently typed (not yet "plus-added") value
+  // in the widget input, which must also be included.
+  pushFromElement(getFieldInput(section_id, fieldName));
+
+  var widget = document.getElementById("widget." + baseId);
+  if (widget) {
+    pushFromElement(widget);
+    var dyn = widget.closest(".cbi-dynlist") || widget.parentElement;
+    if (dyn) {
+      dyn.querySelectorAll("input, textarea").forEach(pushFromElement);
+    }
+  }
+
   return values;
 }
 
@@ -1624,18 +1710,22 @@ function fetchConfigs(sources, subscribeContainer, listId, isOutbound, section_i
       if (xhr.status === 200) {
         try {
           var result = JSON.parse(xhr.responseText);
+          var manualLinks = (sources && Array.isArray(sources.manual_links)) ? sources.manual_links : [];
 
           if (result.error) {
-            showTemporaryError(subscribeContainer, result.error);
-            return;
+            if (manualLinks.length === 0) {
+              showTemporaryError(subscribeContainer, result.error);
+              return;
+            }
+            result = { configs: buildManualConfigs(manualLinks) };
           }
 
-          if (!result || !result.configs || result.configs.length === 0) {
+          var configs = mergeConfigsWithManual(result ? result.configs : [], manualLinks);
+          if (!configs || configs.length === 0) {
             showTemporaryError(subscribeContainer, _("Конфигурации не найдены"));
             return;
           }
 
-          var configs = result.configs;
           if (!subscribeContainer) return;
 
           // Determine mode for cache
