@@ -69,6 +69,10 @@ write_status() {
     done
 }
 
+sanitize_status_value() {
+    printf '%s' "$1" | tr '\r\n' ' ' | sed 's/[[:space:]]\+/ /g;s/^ //;s/ $//'
+}
+
 extract_title() {
     line="$1"
     title="$(printf '%s' "$line" | sed -n 's/.*#\(.*\)$/\1/p')"
@@ -235,7 +239,6 @@ process_section() {
     total_count=0
     eligible_count=0
     excluded_count=0
-    best_url=""
     best_title=""
     changed=0
     applied_count=0
@@ -356,11 +359,22 @@ process_section() {
             ;;
     esac
 
+    if [ "$FORCE_MODE" -eq 1 ]; then
+        write_status "$section" \
+        "status=$status" "mode=$mode" "total=$total_count" "eligible=$eligible_count" "excluded=$excluded_count" \
+        "best_title=$(sanitize_status_value "$best_title")" "applied=$applied_count" "changed=$changed" "note=$note"
+        status_file="$STATE_DIR/$section.status"
+        rank_idx=0
+        while IFS="$(printf '\t')" read -r score lat url title; do
+            rank_idx=$((rank_idx + 1))
+            [ "$rank_idx" -gt 5 ] && break
+            printf 'top%s_title=%s\n' "$rank_idx" "$(sanitize_status_value "$title")" >> "$status_file"
+            printf 'top%s_ping=%s\n' "$rank_idx" "$lat" >> "$status_file"
+        done < "$ranked_file"
+    fi
+
     rm -f "$lines_file" "$ranked_file"
     mark_run_now "$section"
-    [ "$FORCE_MODE" -eq 1 ] && write_status "$section" \
-        "status=$status" "mode=$mode" "total=$total_count" "eligible=$eligible_count" "excluded=$excluded_count" \
-        "best_url=$best_url" "best_title=$best_title" "applied=$applied_count" "changed=$changed" "note=$note"
 }
 
 sections="$(uci -q show podkop 2>/dev/null | sed -n 's/^podkop\.\([^.=]*\)=section$/\1/p')"

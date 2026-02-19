@@ -554,10 +554,19 @@ function renderImmediateAutoUpdateLog(section_id, result, isError, ev) {
     if (result.applied != null) lines.push("Applied entries: " + result.applied);
     if (result.note) lines.push("Note: " + result.note);
     if (result.reason) lines.push("Reason: " + result.reason);
-  }
 
-  if (result && result.log) {
-    lines.push("Log: " + result.log);
+    var topLines = [];
+    for (var i = 1; i <= 5; i++) {
+      var t = result["top" + i + "_title"];
+      var p = result["top" + i + "_ping"];
+      if (t) {
+        topLines.push(i + ". " + t + (p ? " - " + p + " ms" : ""));
+      }
+    }
+    if (topLines.length > 0) {
+      lines.push("Top by ping:");
+      lines = lines.concat(topLines);
+    }
   }
 
   if (isError) {

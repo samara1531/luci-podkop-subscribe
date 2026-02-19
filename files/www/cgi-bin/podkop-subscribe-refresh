@@ -39,18 +39,12 @@ if [ $run_rc -eq 0 ]; then
         done < "$status_file"
     fi
 
-    if [ -n "$run_log" ]; then
-        json_add_string "log" "$run_log"
-    fi
-
     json_dump
     exit 0
 fi
 
 json_init
 json_add_string "error" "Auto-update failed"
-if [ -n "$run_log" ]; then
-    json_add_string "log" "$run_log"
-fi
+json_add_string "details" "$run_log"
 json_dump
 exit 1
