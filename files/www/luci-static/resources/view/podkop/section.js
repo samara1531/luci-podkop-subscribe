@@ -68,6 +68,19 @@ function createSectionContent(section) {
   );
   o.depends("proxy_config_type", "outbound");
   o.rows = 10;
+  o.cfgvalue = function (section_id) {
+    var raw = this.map && this.map.data
+      ? this.map.data.get("podkop", section_id, "outbound_json")
+      : null;
+    if (!raw || typeof raw !== "string") {
+      return raw;
+    }
+    try {
+      return JSON.stringify(JSON.parse(raw), null, 2);
+    } catch (e) {
+      return raw;
+    }
+  };
   o.validate = function (section_id, value) {
     // Optional
     if (!value || value.length === 0) {
