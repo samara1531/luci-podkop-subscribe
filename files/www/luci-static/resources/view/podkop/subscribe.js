@@ -293,6 +293,160 @@ function createSuccessMessage(text) {
   return div;
 }
 
+function decodeComponent(value) {
+  if (value == null) return "";
+  try {
+    return decodeURIComponent(String(value).replace(/\+/g, "%20"));
+  } catch (e) {
+    return String(value);
+  }
+}
+
+function parseVlessConfigUrl(vlessUrl) {
+  if (!vlessUrl || typeof vlessUrl !== "string") {
+    throw new Error(_("Empty config URL"));
+  }
+  if (!/^vless:\/\//i.test(vlessUrl)) {
+    throw new Error(_("Only vless:// URLs are supported for outbound conversion"));
+  }
+
+  var parsed = new URL(vlessUrl);
+  var params = parsed.searchParams;
+
+  var uuid = decodeComponent(parsed.username || "");
+  var server = decodeComponent(parsed.hostname || "");
+  var port = parseInt(parsed.port || "443", 10);
+  var tag = decodeComponent((parsed.hash || "").replace(/^#/, "")) || _("VLESS outbound");
+
+  if (!uuid) {
+    throw new Error(_("UUID was not found in URL"));
+  }
+  if (!server) {
+    throw new Error(_("Server was not found in URL"));
+  }
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error(_("Invalid server port"));
+  }
+
+  var transportType = decodeComponent(params.get("type") || "tcp");
+  var security = decodeComponent(params.get("security") || "none");
+  var sni = decodeComponent(params.get("sni") || server);
+  var hostParam = decodeComponent(params.get("host") || sni || server);
+  var pathParam = decodeComponent(params.get("path") || "/");
+  var modeParam = decodeComponent(params.get("mode") || "auto");
+  var fingerprint = decodeComponent(params.get("fp") || "");
+  var publicKey = decodeComponent(params.get("pbk") || "");
+  var shortId = decodeComponent(params.get("sid") || "");
+  var flow = decodeComponent(params.get("flow") || "");
+  var packetEncoding = decodeComponent(params.get("packetEncoding") || "");
+  var alpn = decodeComponent(params.get("alpn") || "");
+  var extraRaw = decodeComponent(params.get("extra") || "");
+
+  var outbound = {
+    type: "vless",
+    tag: tag,
+    server: server,
+    server_port: port,
+    uuid: uuid,
+    flow: flow
+  };
+
+  if (security === "tls" || security === "reality") {
+    var tls = {
+      enabled: true,
+      server_name: sni || server
+    };
+
+    if (alpn) {
+      tls.alpn = alpn.split(",").map(function(item) {
+        return item.trim();
+      }).filter(function(item) {
+        return item.length > 0;
+      });
+    } else {
+      tls.alpn = ["h2", "http/1.1"];
+    }
+
+    if (security === "reality") {
+      tls.reality = {
+        enabled: true,
+        public_key: publicKey,
+        short_id: shortId
+      };
+    }
+
+    if (fingerprint) {
+      tls.utls = {
+        enabled: true,
+        fingerprint: fingerprint
+      };
+    }
+
+    outbound.tls = tls;
+  }
+
+  if (packetEncoding) {
+    outbound.packet_encoding = packetEncoding;
+  }
+
+  if (transportType === "xhttp") {
+    outbound.transport = {
+      type: "xhttp",
+      path: pathParam || "/",
+      host: hostParam || server,
+      mode: modeParam || "auto"
+    };
+
+    if (extraRaw) {
+      try {
+        var extraObj = JSON.parse(extraRaw);
+        if (extraObj && typeof extraObj === "object" && !Array.isArray(extraObj)) {
+          Object.keys(extraObj).forEach(function (key) {
+            if (outbound.transport[key] == null) {
+              outbound.transport[key] = extraObj[key];
+            }
+          });
+        }
+      } catch (e) {
+        // Ignore invalid `extra` payload to keep base transport config usable.
+      }
+    }
+  } else if (transportType === "ws") {
+    outbound.transport = {
+      type: "ws",
+      path: pathParam || "/"
+    };
+    if (hostParam) {
+      outbound.transport.headers = { Host: hostParam };
+    }
+  } else if (transportType && transportType !== "tcp") {
+    outbound.transport = { type: transportType };
+  }
+
+  return outbound;
+}
+
+function findOutboundTextarea(section_id) {
+  return (
+    document.getElementById("widget.cbid.podkop." + section_id + ".outbound_json") ||
+    document.getElementById("cbid.podkop." + section_id + ".outbound_json") ||
+    document.querySelector('textarea[id*="podkop.' + section_id + '.outbound_json"]')
+  );
+}
+
+function setOutboundTextareaValue(section_id, outboundData) {
+  var outboundTextarea = findOutboundTextarea(section_id);
+  if (!outboundTextarea) {
+    throw new Error(_("Could not find Outbound Configuration field"));
+  }
+
+  outboundTextarea.value = JSON.stringify(outboundData, null, 2);
+  if (outboundTextarea.dispatchEvent) {
+    outboundTextarea.dispatchEvent(new Event("change", { bubbles: true }));
+    outboundTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+}
+
 // Create warning/loading message element
 function createWarningMessage(text) {
   var div = document.createElement("div");
@@ -449,7 +603,7 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
 
   var titleText;
   if (isOutbound) {
-    titleText = _("Нажмите на конфигурацию для применения в Xray");
+    titleText = _("Нажмите на конфигурацию для применения в sing-box");
   } else if (isUrltest) {
     titleText = _("Нажмите на конфигурации для добавления в URLTest (повторный клик - удаление)");
   } else if (isSelector) {
@@ -560,7 +714,7 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
     configItem._configData = config;
 
     if (isOutbound) {
-      configItem.onclick = createOutboundClickHandler(config, configItem, configList);
+      configItem.onclick = createOutboundClickHandlerEnhanced(config, configItem, configList, section_id);
     } else if (isUrltest) {
       configItem.onclick = createUrltestClickHandler(config, configItem, configList, section_id, isXhttp);
     } else if (isSelector) {
@@ -861,88 +1015,53 @@ function updateDynamicList(section_id, baseId, selectedUrls, fieldName) {
 }
 
 // Click handler for Outbound mode
-function createOutboundClickHandler(config, configItem, configList) {
+function createOutboundClickHandler(config, configItem, configList, section_id) {
+  return createOutboundClickHandlerEnhanced(config, configItem, configList, section_id);
+}
+function createOutboundClickHandlerEnhanced(config, configItem, configList, section_id) {
   return function (e) {
     e.stopPropagation();
 
-    var loadingText = createWarningMessage(_("Применение конфигурации..."));
+    var loadingText = createWarningMessage(_("Applying configuration..."));
     configItem.appendChild(loadingText);
 
-    var xhrConfig = new XMLHttpRequest();
-    xhrConfig.open("POST", "/cgi-bin/podkop-xray-config", true);
-    xhrConfig.setRequestHeader("Content-Type", "text/plain");
-
-    xhrConfig.onreadystatechange = function () {
-      if (xhrConfig.readyState === 4) {
-        if (loadingText.parentNode) {
-          loadingText.parentNode.removeChild(loadingText);
-        }
-
-        if (xhrConfig.status === 200) {
-          try {
-            JSON.parse(xhrConfig.responseText);
-
-            // Reset all items
-            var allItems = configList.querySelectorAll(".podkop-subscribe-item");
-            allItems.forEach(function (item) {
-              item.classList.remove("selected");
-            });
-
-            configItem.classList.add("selected");
-
-            var successDiv = createSuccessMessage(
-              _("Конфигурация применена к Xray и служба перезапущена")
-            );
-            configItem.appendChild(successDiv);
-            setTimeout(function () {
-              if (successDiv.parentNode) {
-                successDiv.parentNode.removeChild(successDiv);
-              }
-            }, 3000);
-          } catch (err) {
-            var errorDiv = createErrorMessage(
-              _("Ошибка при применении конфигурации: ") + err.message,
-              true
-            );
-            configItem.appendChild(errorDiv);
-            setTimeout(function () {
-              if (errorDiv.parentNode) {
-                errorDiv.parentNode.removeChild(errorDiv);
-              }
-            }, 5000);
-          }
-        } else {
-          var errorDiv = createErrorMessage(
-            _("Ошибка при применении конфигурации: HTTP ") + xhrConfig.status,
-            true
-          );
-          configItem.appendChild(errorDiv);
-          setTimeout(function () {
-            if (errorDiv.parentNode) {
-              errorDiv.parentNode.removeChild(errorDiv);
-            }
-          }, 5000);
-        }
-      }
-    };
-
-    xhrConfig.onerror = function () {
+    try {
+      var outboundData = parseVlessConfigUrl(config.url);
+      setOutboundTextareaValue(section_id, outboundData);
+    } catch (parseErr) {
       if (loadingText.parentNode) {
         loadingText.parentNode.removeChild(loadingText);
       }
-      var errorDiv = createErrorMessage(
-        _("Ошибка сети при применении конфигурации"),
+      var parseErrorDiv = createErrorMessage(
+        _("Failed to convert URL to outbound JSON: ") + parseErr.message,
         true
       );
-      configItem.appendChild(errorDiv);
+      configItem.appendChild(parseErrorDiv);
       setTimeout(function () {
-        if (errorDiv.parentNode) {
-          errorDiv.parentNode.removeChild(errorDiv);
+        if (parseErrorDiv.parentNode) {
+          parseErrorDiv.parentNode.removeChild(parseErrorDiv);
         }
-      }, 5000);
-    };
+      }, 6000);
+      return;
+    }
 
-    xhrConfig.send(config.url);
+    if (loadingText.parentNode) {
+      loadingText.parentNode.removeChild(loadingText);
+    }
+
+    var allItems = configList.querySelectorAll(".podkop-subscribe-item");
+    allItems.forEach(function (item) {
+      item.classList.remove("selected");
+    });
+    configItem.classList.add("selected");
+
+    var messageNode = createSuccessMessage(_("Outbound JSON is filled."));
+    configItem.appendChild(messageNode);
+    setTimeout(function () {
+      if (messageNode.parentNode) {
+        messageNode.parentNode.removeChild(messageNode);
+      }
+    }, 5000);
   };
 }
 
@@ -1135,26 +1254,9 @@ function getCurrentConfigUrl(section_id, mode, callback) {
     if (callback) callback(null);
     return null;
   } else if (mode === "outbound") {
-    // For outbound, fetch from CGI script
-    if (callback) {
-      var xhr = new XMLHttpRequest();
-      xhr.open("GET", "/cgi-bin/podkop-current-outbound", true);
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState === 4) {
-          if (xhr.status === 200 && xhr.responseText) {
-            callback(xhr.responseText.trim());
-          } else {
-            callback(null);
-          }
-        }
-      };
-      xhr.onerror = function() {
-        callback(null);
-      };
-      xhr.send();
-    } else {
-      return null;
-    }
+    // Outbound now applies directly to the form field.
+    if (callback) callback(null);
+    return null;
   }
   if (!callback) return null;
 }
@@ -1536,3 +1638,4 @@ var EntryPoint = {
 };
 
 return baseclass.extend(EntryPoint);
+
