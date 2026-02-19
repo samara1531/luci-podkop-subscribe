@@ -1072,36 +1072,46 @@ function getCurrentProxyConfigType(section_id) {
   return select ? select.value : null;
 }
 
-function triggerSaveApply() {
-  var applyBtn =
-    document.querySelector('.cbi-page-actions button[name="cbi.apply"], .cbi-page-actions input[name="cbi.apply"]') ||
-    document.querySelector(".cbi-page-actions button.cbi-button-apply, .cbi-page-actions input.cbi-button-apply");
+function applySelectedConfig(section_id, mode, payload) {
+  return new Promise(function (resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/cgi-bin/podkop-subscribe-apply", true);
+    xhr.setRequestHeader("Content-Type", "application/json");
 
-  if (applyBtn && !applyBtn.disabled) {
-    applyBtn.click();
-    return true;
-  }
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (xhr.status !== 200) {
+        reject(new Error("HTTP " + xhr.status));
+        return;
+      }
+      try {
+        var result = JSON.parse(xhr.responseText);
+        if (result && !result.error) {
+          resolve(result);
+        } else {
+          reject(new Error(result && result.error ? result.error : "Unknown error"));
+        }
+      } catch (e) {
+        reject(new Error("Invalid JSON response"));
+      }
+    };
 
-  // Fallback: submit main CBI form with cbi.apply marker.
-  var form = document.querySelector("form.cbi-map");
-  if (!form) return false;
+    xhr.onerror = function () {
+      reject(new Error("Network error"));
+    };
 
-  var marker = form.querySelector('input[name="cbi.apply"][data-podkop-auto="1"]');
-  if (!marker) {
-    marker = document.createElement("input");
-    marker.type = "hidden";
-    marker.name = "cbi.apply";
-    marker.value = "1";
-    marker.setAttribute("data-podkop-auto", "1");
-    form.appendChild(marker);
-  }
+    var body = {
+      section_id: section_id,
+      mode: mode
+    };
+    if (payload && typeof payload === "object") {
+      Object.keys(payload).forEach(function (k) {
+        body[k] = payload[k];
+      });
+    }
 
-  if (typeof form.requestSubmit === "function") {
-    form.requestSubmit();
-  } else {
-    form.submit();
-  }
-  return true;
+    xhr.send(JSON.stringify(body));
+  });
 }
 
 function getPingButtonElement(section_id) {
@@ -1467,7 +1477,7 @@ function createUrlClickHandler(config, configItem, configList, section_id, isXht
 
     // Block xhttp configs
     if (isXhttp) {
-      var errorDiv = createErrorMessage(_("XHTTP не поддерживается по умолчанию"), true);
+      var errorDiv = createErrorMessage(_("XHTTP is not supported by default"), true);
       configItem.appendChild(errorDiv);
       setTimeout(function () {
         if (errorDiv.parentNode) {
@@ -1491,25 +1501,38 @@ function createUrlClickHandler(config, configItem, configList, section_id, isXht
       }
     }
 
-    // Reset all items
     var allItems = configList.querySelectorAll(".podkop-subscribe-item");
     allItems.forEach(function (item) {
       item.classList.remove("selected");
     });
-
-    // Mark selected
     configItem.classList.add("selected");
 
-    var successDiv = createSuccessMessage(_("Конфигурация выбрана"));
-    configItem.appendChild(successDiv);
-    setTimeout(function () {
-      triggerSaveApply();
-    }, 100);
-    setTimeout(function () {
-      if (successDiv.parentNode) {
-        successDiv.parentNode.removeChild(successDiv);
+    var loadingText = createWarningMessage(_("Applying configuration..."));
+    configItem.appendChild(loadingText);
+
+    applySelectedConfig(section_id, "url", { value: config.url }).then(function () {
+      if (loadingText.parentNode) {
+        loadingText.parentNode.removeChild(loadingText);
       }
-    }, 2000);
+      var successDiv = createSuccessMessage(_("Configuration applied."));
+      configItem.appendChild(successDiv);
+      setTimeout(function () {
+        if (successDiv.parentNode) {
+          successDiv.parentNode.removeChild(successDiv);
+        }
+      }, 2500);
+    }).catch(function (err) {
+      if (loadingText.parentNode) {
+        loadingText.parentNode.removeChild(loadingText);
+      }
+      var errorDiv = createErrorMessage(_("Apply failed: ") + err.message, true);
+      configItem.appendChild(errorDiv);
+      setTimeout(function () {
+        if (errorDiv.parentNode) {
+          errorDiv.parentNode.removeChild(errorDiv);
+        }
+      }, 5000);
+    });
   };
 }
 
@@ -1735,8 +1758,9 @@ function createOutboundClickHandlerEnhanced(config, configItem, configList, sect
     var loadingText = createWarningMessage(_("Applying configuration..."));
     configItem.appendChild(loadingText);
 
+    var outboundData;
     try {
-      var outboundData = parseVlessConfigUrl(config.url);
+      outboundData = parseVlessConfigUrl(config.url);
       setOutboundTextareaValue(section_id, outboundData);
     } catch (parseErr) {
       if (loadingText.parentNode) {
@@ -1755,26 +1779,37 @@ function createOutboundClickHandlerEnhanced(config, configItem, configList, sect
       return;
     }
 
-    if (loadingText.parentNode) {
-      loadingText.parentNode.removeChild(loadingText);
-    }
-
     var allItems = configList.querySelectorAll(".podkop-subscribe-item");
     allItems.forEach(function (item) {
       item.classList.remove("selected");
     });
     configItem.classList.add("selected");
 
-    var messageNode = createSuccessMessage(_("Outbound JSON is filled."));
-    configItem.appendChild(messageNode);
-    setTimeout(function () {
-      triggerSaveApply();
-    }, 100);
-    setTimeout(function () {
-      if (messageNode.parentNode) {
-        messageNode.parentNode.removeChild(messageNode);
+    applySelectedConfig(section_id, "outbound", {
+      outbound_json: JSON.stringify(outboundData)
+    }).then(function () {
+      if (loadingText.parentNode) {
+        loadingText.parentNode.removeChild(loadingText);
       }
-    }, 5000);
+      var messageNode = createSuccessMessage(_("Outbound configuration applied."));
+      configItem.appendChild(messageNode);
+      setTimeout(function () {
+        if (messageNode.parentNode) {
+          messageNode.parentNode.removeChild(messageNode);
+        }
+      }, 5000);
+    }).catch(function (err) {
+      if (loadingText.parentNode) {
+        loadingText.parentNode.removeChild(loadingText);
+      }
+      var errorNode = createErrorMessage(_("Apply failed: ") + err.message, true);
+      configItem.appendChild(errorNode);
+      setTimeout(function () {
+        if (errorNode.parentNode) {
+          errorNode.parentNode.removeChild(errorNode);
+        }
+      }, 6000);
+    });
   };
 }
 

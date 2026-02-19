@@ -41,6 +41,7 @@ sh /tmp/podkop-subscribe-uninstall.sh
 - Per-config actions in list:
   - `Set`
   - `Block/Unblock`
+  - `Set` applies config immediately for `url` and `outbound` modes
 - Ping workflow:
   - `Ping Test` button (no apply)
   - `Ping Test All` button (checks full list, may be slower)

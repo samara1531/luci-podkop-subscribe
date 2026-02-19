@@ -50,6 +50,9 @@ chmod +x /www/cgi-bin/podkop-subscribe-refresh
 wget -q -O /www/cgi-bin/podkop-subscribe-ping "${BASE_URL}/www/cgi-bin/podkop-subscribe-ping"
 chmod +x /www/cgi-bin/podkop-subscribe-ping
 
+wget -q -O /www/cgi-bin/podkop-subscribe-apply "${BASE_URL}/www/cgi-bin/podkop-subscribe-apply"
+chmod +x /www/cgi-bin/podkop-subscribe-apply
+
 wget -q -O /www/luci-static/resources/view/podkop/section.js "${BASE_URL}/www/luci-static/resources/view/podkop/section.js"
 chmod 644 /www/luci-static/resources/view/podkop/section.js
 
