@@ -62,6 +62,31 @@ function injectSubscribeStyles() {
       font-size: 14px;
       color: var(--text-color-medium, #666);
     }
+    .podkop-subscribe-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 6px 0 10px 0;
+      font-size: 12px;
+    }
+    .podkop-subscribe-sort-btn {
+      border: 1px solid var(--background-color-low, #999);
+      border-radius: 4px;
+      background: var(--background-color-high, #fff);
+      color: var(--text-color-high, inherit);
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    .podkop-subscribe-alive-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .podkop-subscribe-alive-wrap input {
+      margin: 0;
+    }
     .podkop-subscribe-list {
       max-height: 300px;
       overflow-y: auto;
@@ -246,6 +271,28 @@ function extractHostFromConfigUrl(url) {
   var colon = core.lastIndexOf(":");
   if (colon > 0) core = core.substring(0, colon);
   return normalizePingHost(core);
+}
+
+function resolvePingValueForConfig(section_id, config) {
+  var pingCache = sectionPingCache[section_id] || {};
+  var pingByUrl = pingCache.byUrl || {};
+  var pingByTitle = pingCache.byTitle || {};
+  var pingByHost = pingCache.byHost || {};
+  var pingValue = pingByUrl[config.url];
+  if (pingValue == null || pingValue === "") {
+    pingValue = pingByTitle[normalizePingTitle(config.title)];
+  }
+  if (pingValue == null || pingValue === "") {
+    pingValue = pingByHost[extractHostFromConfigUrl(config.url)];
+  }
+  return pingValue;
+}
+
+function isAlivePingValue(pingValue) {
+  if (pingValue == null || pingValue === "") return false;
+  if (String(pingValue) === "999999") return false;
+  var n = parseInt(pingValue, 10);
+  return !isNaN(n) && n > 0 && n < 999999;
 }
 
 // Remove config lists when connection type or proxy_config_type changes
@@ -866,6 +913,31 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
 
   contentContainer.appendChild(title);
 
+  var viewState = {
+    sortByPing: true,
+    onlyAlive: false
+  };
+
+  var controls = document.createElement("div");
+  controls.className = "podkop-subscribe-controls";
+
+  var sortBtn = document.createElement("button");
+  sortBtn.type = "button";
+  sortBtn.className = "podkop-subscribe-sort-btn";
+  controls.appendChild(sortBtn);
+
+  var aliveWrap = document.createElement("label");
+  aliveWrap.className = "podkop-subscribe-alive-wrap";
+  var aliveCheckbox = document.createElement("input");
+  aliveCheckbox.type = "checkbox";
+  var aliveText = document.createElement("span");
+  aliveText.textContent = _("Только живые");
+  aliveWrap.appendChild(aliveCheckbox);
+  aliveWrap.appendChild(aliveText);
+  controls.appendChild(aliveWrap);
+
+  contentContainer.appendChild(controls);
+
   var configList = document.createElement("div");
   configList.className = "podkop-subscribe-list";
 
@@ -894,9 +966,47 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
     blockedLookup[url] = true;
   });
 
+  function updateSortButtonLabel() {
+    sortBtn.textContent = viewState.sortByPing ? _("Сортировка: ping") : _("Сортировка: исходная");
+  }
+  updateSortButtonLabel();
+
+  var lastRenderCurrentUrl = null;
+
   // Function to render configs with current URL highlighting
   var renderConfigs = function(currentConfigUrl) {
-    configs.forEach(function (config, index) {
+    if (typeof currentConfigUrl !== "undefined") {
+      lastRenderCurrentUrl = currentConfigUrl;
+    }
+
+    configList.innerHTML = "";
+
+    var prepared = configs.map(function(cfg, idx) {
+      return {
+        config: cfg,
+        index: idx,
+        ping: resolvePingValueForConfig(section_id, cfg)
+      };
+    });
+
+    if (viewState.onlyAlive) {
+      prepared = prepared.filter(function(entry) {
+        return isAlivePingValue(entry.ping);
+      });
+    }
+
+    if (viewState.sortByPing) {
+      prepared.sort(function(a, b) {
+        var ap = isAlivePingValue(a.ping) ? parseInt(a.ping, 10) : 999999999;
+        var bp = isAlivePingValue(b.ping) ? parseInt(b.ping, 10) : 999999999;
+        if (ap !== bp) return ap - bp;
+        return a.index - b.index;
+      });
+    }
+
+    prepared.forEach(function (entry) {
+    var config = entry.config;
+    var index = entry.index;
     var configItem = document.createElement("div");
     configItem.className = "podkop-subscribe-item";
     if (blockedLookup[config.url]) {
@@ -969,17 +1079,7 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
 
     var pingLabel = document.createElement("span");
     pingLabel.className = "podkop-subscribe-ping";
-    var pingCache = sectionPingCache[section_id] || {};
-    var pingByUrl = pingCache.byUrl || {};
-    var pingByTitle = pingCache.byTitle || {};
-    var pingByHost = pingCache.byHost || {};
-    var pingValue = pingByUrl[config.url];
-    if (pingValue == null || pingValue === "") {
-      pingValue = pingByTitle[normalizePingTitle(config.title)];
-    }
-    if (pingValue == null || pingValue === "") {
-      pingValue = pingByHost[extractHostFromConfigUrl(config.url)];
-    }
+    var pingValue = entry.ping;
     if (pingValue != null && pingValue !== "") {
       pingLabel.textContent = String(pingValue) === "999999" ? "timeout" : (pingValue + " ms");
       if (String(pingValue) === "999999") {
@@ -1048,6 +1148,18 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
         counter.textContent = _("Выбрано: ") + selectedUrls.length;
       }
     }
+  };
+
+  sortBtn.onclick = function(e) {
+    e.stopPropagation();
+    viewState.sortByPing = !viewState.sortByPing;
+    updateSortButtonLabel();
+    renderConfigs(lastRenderCurrentUrl);
+  };
+
+  aliveCheckbox.onchange = function() {
+    viewState.onlyAlive = !!aliveCheckbox.checked;
+    renderConfigs(lastRenderCurrentUrl);
   };
 
   // Get current selected config for highlighting and render
