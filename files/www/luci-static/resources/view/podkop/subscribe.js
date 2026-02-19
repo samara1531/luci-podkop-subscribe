@@ -1074,15 +1074,33 @@ function getCurrentProxyConfigType(section_id) {
 
 function triggerSaveApply() {
   var applyBtn =
-    document.querySelector('button[name="cbi.apply"]') ||
-    document.querySelector('input[name="cbi.apply"]') ||
-    document.querySelector(".cbi-page-actions button.cbi-button-apply") ||
-    document.querySelector(".cbi-page-actions input.cbi-button-apply");
+    document.querySelector('.cbi-page-actions button[name="cbi.apply"], .cbi-page-actions input[name="cbi.apply"]') ||
+    document.querySelector(".cbi-page-actions button.cbi-button-apply, .cbi-page-actions input.cbi-button-apply");
 
-  if (!applyBtn || applyBtn.disabled) {
-    return false;
+  if (applyBtn && !applyBtn.disabled) {
+    applyBtn.click();
+    return true;
   }
-  applyBtn.click();
+
+  // Fallback: submit main CBI form with cbi.apply marker.
+  var form = document.querySelector("form.cbi-map");
+  if (!form) return false;
+
+  var marker = form.querySelector('input[name="cbi.apply"][data-podkop-auto="1"]');
+  if (!marker) {
+    marker = document.createElement("input");
+    marker.type = "hidden";
+    marker.name = "cbi.apply";
+    marker.value = "1";
+    marker.setAttribute("data-podkop-auto", "1");
+    form.appendChild(marker);
+  }
+
+  if (typeof form.requestSubmit === "function") {
+    form.requestSubmit();
+  } else {
+    form.submit();
+  }
   return true;
 }
 
