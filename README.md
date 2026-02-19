@@ -35,16 +35,17 @@ sh /tmp/podkop-subscribe-uninstall.sh
 - Multi-subscribe support:
   - main `Subscribe URL`
   - `Extra Subscribe URLs` (DynamicList, with `+`)
+  - supports both classic base64 subscriptions and plain-text URL lists
 - Manual links support:
   - `Manual Config Links` (DynamicList, with `+`)
   - supports `vless://`, `ss://`, `trojan://`, `hy2://`, `socks://`
 - Per-config actions in list:
   - `Set`
   - `Block/Unblock`
-  - `Set` applies config immediately for `url` and `outbound` modes
+  - `Set` applies config immediately for `url` and `outbound` modes via backend apply (no manual `Save & Apply`)
 - Ping workflow:
   - `Ping Test` button (no apply)
-  - `Ping Test All` button (checks full list, may be slower)
+  - `Ping Test All` button (checks full list, may be slower; runs in background with status polling)
   - counter near Ping Test button: `tested/total`
   - ping shown per row
   - timeout shown as `timeout`
@@ -87,3 +88,4 @@ Then:
 - This project is file-based (not an `.ipk` package), so it will not appear in `opkg list-installed` as a dedicated package.
 - Use browser hard refresh (`Ctrl+F5`) after frontend updates.
 - If scripts were downloaded on Windows and transferred manually, ensure Unix line endings and no BOM.
+- `Outbound Configuration` is auto pretty-formatted on page load (visual only).
