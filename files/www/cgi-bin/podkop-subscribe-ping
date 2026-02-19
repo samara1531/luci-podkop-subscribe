@@ -11,10 +11,12 @@ POST_DATA="$(printf '%s' "$POST_DATA" | tr -d '\r')"
 
 section_id=""
 ping_all="0"
+action="run"
 
 if printf '%s' "$POST_DATA" | grep -q '^[[:space:]]*{'; then
     section_id="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.section_id' 2>/dev/null || true)"
     ping_all="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.ping_all' 2>/dev/null || true)"
+    action="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.action' 2>/dev/null || true)"
 else
     section_id="$POST_DATA"
 fi
@@ -22,6 +24,7 @@ fi
 section_id="$(printf '%s' "$section_id" | tr -d '\r\n')"
 ping_all="$(printf '%s' "$ping_all" | tr -d '\r\n')"
 [ "$ping_all" = "1" ] || ping_all="0"
+[ -z "$action" ] && action="run"
 
 if [ -z "$section_id" ]; then
     json_init
@@ -37,18 +40,16 @@ if [ ! -x /usr/bin/podkop-subscribe-autoupdate ]; then
     exit 1
 fi
 
-if [ "$ping_all" = "1" ]; then
-    run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply --ping-all 2>&1)"
-else
-    run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply 2>&1)"
-fi
-run_rc=$?
 status_file="/tmp/podkop-subscribe-autoupdate/${section_id}.status"
+pid_file="/tmp/podkop-subscribe-autoupdate/${section_id}.pingall.pid"
+done_file="/tmp/podkop-subscribe-autoupdate/${section_id}.pingall.done"
+log_file="/tmp/podkop-subscribe-autoupdate/${section_id}.pingall.log"
 
-if [ $run_rc -eq 0 ]; then
+json_with_status() {
     json_init
     json_add_boolean "success" 1
-    json_add_string "message" "Ping test completed"
+    json_add_string "message" "$1"
+    json_add_boolean "running" "$2"
 
     if [ -f "$status_file" ]; then
         while IFS= read -r line; do
@@ -59,8 +60,68 @@ if [ $run_rc -eq 0 ]; then
             json_add_string "$key" "$val"
         done < "$status_file"
     fi
-
     json_dump
+}
+
+if [ "$action" = "status" ]; then
+    if [ -f "$pid_file" ]; then
+        pid="$(cat "$pid_file" 2>/dev/null || true)"
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            json_with_status "Full ping test is running" 1
+            exit 0
+        fi
+    fi
+
+    if [ -f "$done_file" ]; then
+        rc="$(cat "$done_file" 2>/dev/null || echo 1)"
+        if [ "$rc" = "0" ]; then
+            json_with_status "Ping test completed" 0
+            exit 0
+        fi
+        json_init
+        json_add_string "error" "Ping test failed"
+        if [ -f "$log_file" ]; then
+            json_add_string "details" "$(tail -n 20 "$log_file" 2>/dev/null)"
+        fi
+        json_dump
+        exit 1
+    fi
+
+    json_with_status "No running ping test" 0
+    exit 0
+fi
+
+if [ "$action" = "start" ]; then
+    if [ -f "$pid_file" ]; then
+        pid="$(cat "$pid_file" 2>/dev/null || true)"
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            json_with_status "Full ping test already running" 1
+            exit 0
+        fi
+    fi
+
+    rm -f "$done_file" "$log_file"
+    (
+        /usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply --ping-all >"$log_file" 2>&1
+        rc=$?
+        echo "$rc" > "$done_file"
+        rm -f "$pid_file"
+    ) &
+    echo "$!" > "$pid_file"
+
+    json_with_status "Full ping test started" 1
+    exit 0
+fi
+
+if [ "$ping_all" = "1" ]; then
+    run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply --ping-all 2>&1)"
+else
+    run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" --no-apply 2>&1)"
+fi
+run_rc=$?
+
+if [ $run_rc -eq 0 ]; then
+    json_with_status "Ping test completed" 0
     exit 0
 fi
 

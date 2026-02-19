@@ -875,7 +875,7 @@ function runImmediateAutoUpdate(section_id) {
   });
 }
 
-function runImmediatePingTest(section_id, pingAll) {
+function requestPingApi(payload) {
   return new Promise(function (resolve, reject) {
     var xhr = new XMLHttpRequest();
     xhr.open("POST", "/cgi-bin/podkop-subscribe-ping", true);
@@ -903,10 +903,47 @@ function runImmediatePingTest(section_id, pingAll) {
       reject(new Error("Network error"));
     };
 
-    xhr.send(JSON.stringify({
+    xhr.send(JSON.stringify(payload || {}));
+  });
+}
+
+function runImmediatePingTest(section_id, pingAll) {
+  return requestPingApi({
+    section_id: section_id,
+    ping_all: pingAll ? 1 : 0,
+    action: "run"
+  });
+}
+
+function runImmediatePingTestAllAsync(section_id) {
+  return new Promise(function (resolve, reject) {
+    requestPingApi({
       section_id: section_id,
-      ping_all: pingAll ? 1 : 0
-    }));
+      ping_all: 1,
+      action: "start"
+    }).then(function () {
+      var startedAt = Date.now();
+
+      function poll() {
+        requestPingApi({
+          section_id: section_id,
+          ping_all: 1,
+          action: "status"
+        }).then(function (result) {
+          if (result && (result.running === true || String(result.running) === "1")) {
+            if (Date.now() - startedAt > 12 * 60 * 1000) {
+              reject(new Error("Timeout waiting for full ping test"));
+              return;
+            }
+            setTimeout(poll, 2000);
+            return;
+          }
+          resolve(result || {});
+        }).catch(reject);
+      }
+
+      setTimeout(poll, 1500);
+    }).catch(reject);
   });
 }
 
@@ -2220,7 +2257,7 @@ function enhanceSectionWithSubscribe(section) {
 
     ui.addNotification(null, E("p", {}, _("Running full ping test...")), "info");
 
-    runImmediatePingTest(section_id, true).then(function (result) {
+    runImmediatePingTestAllAsync(section_id).then(function (result) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
       var finalResult = result || {};
       var effectiveMode = finalResult.mode || mode;
