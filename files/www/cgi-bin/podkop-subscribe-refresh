@@ -6,8 +6,23 @@
 echo "Content-Type: application/json"
 echo ""
 
-read -r section_id
+read -r POST_DATA
+POST_DATA="$(printf '%s' "$POST_DATA" | tr -d '\r')"
+
+section_id=""
+blocked_urls=""
+blocked_urls_provided="0"
+
+if printf '%s' "$POST_DATA" | grep -q '^[[:space:]]*{'; then
+    section_id="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.section_id' 2>/dev/null || true)"
+    blocked_urls="$(printf '%s' "$POST_DATA" | jsonfilter -e '@.blocked_urls' 2>/dev/null || true)"
+    blocked_urls_provided="1"
+else
+    section_id="$POST_DATA"
+fi
+
 section_id="$(printf '%s' "$section_id" | tr -d '\r\n')"
+blocked_urls="$(printf '%s' "$blocked_urls" | tr -d '\r\n')"
 
 if [ -z "$section_id" ]; then
     json_init
@@ -23,7 +38,7 @@ if [ ! -x /usr/bin/podkop-subscribe-autoupdate ]; then
     exit 1
 fi
 
-run_log="$(/usr/bin/podkop-subscribe-autoupdate --force "$section_id" 2>&1)"
+run_log="$(PODKOP_BLOCKED_URLS="$blocked_urls" PODKOP_BLOCKED_URLS_PROVIDED="$blocked_urls_provided" /usr/bin/podkop-subscribe-autoupdate --force "$section_id" 2>&1)"
 run_rc=$?
 status_file="/tmp/podkop-subscribe-autoupdate/${section_id}.status"
 

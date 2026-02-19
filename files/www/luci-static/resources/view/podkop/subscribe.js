@@ -903,16 +903,59 @@ function refreshConfigListFromSources(section_id, mode, ev) {
   );
 }
 
-function getBlockedUrls(section_id) {
+var BLOCKED_URL_ENC_PREFIX = "enc:";
+
+function decodeBlockedUrlItem(item) {
+  var value = String(item || "").trim();
+  if (!value) return "";
+  if (value.indexOf(BLOCKED_URL_ENC_PREFIX) === 0) {
+    try {
+      return decodeURIComponent(value.substring(BLOCKED_URL_ENC_PREFIX.length));
+    } catch (e) {
+      return value.substring(BLOCKED_URL_ENC_PREFIX.length);
+    }
+  }
+  return value;
+}
+
+function encodeBlockedUrlItem(url) {
+  var value = String(url || "").trim();
+  if (!value) return "";
+  return BLOCKED_URL_ENC_PREFIX + encodeURIComponent(value);
+}
+
+function readBlockedUrlsRaw(section_id) {
   var input = getFieldInput(section_id, "subscribe_blocked_urls");
-  if (!input || !input.value) return [];
-  return input.value.split(",").map(function(v) { return v.trim(); }).filter(Boolean);
+  if (!input || !input.value) return "";
+  return String(input.value || "").trim();
+}
+
+function getBlockedUrls(section_id) {
+  var raw = readBlockedUrlsRaw(section_id);
+  if (!raw) return [];
+  var out = [];
+  var seen = {};
+  raw.split(",").forEach(function(v) {
+    var decoded = decodeBlockedUrlItem(v);
+    if (!decoded || seen[decoded]) return;
+    seen[decoded] = true;
+    out.push(decoded);
+  });
+  return out;
 }
 
 function setBlockedUrls(section_id, urls) {
   var input = getFieldInput(section_id, "subscribe_blocked_urls");
   if (!input) return;
-  input.value = urls.join(",");
+  var out = [];
+  var seen = {};
+  (Array.isArray(urls) ? urls : []).forEach(function(url) {
+    var clean = String(url || "").trim();
+    if (!clean || seen[clean]) return;
+    seen[clean] = true;
+    out.push(encodeBlockedUrlItem(clean));
+  });
+  input.value = out.join(",");
   if (input.dispatchEvent) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
@@ -944,7 +987,7 @@ function runImmediateAutoUpdate(section_id) {
   return new Promise(function (resolve, reject) {
     var xhr = new XMLHttpRequest();
     xhr.open("POST", "/cgi-bin/podkop-subscribe-refresh", true);
-    xhr.setRequestHeader("Content-Type", "text/plain");
+    xhr.setRequestHeader("Content-Type", "application/json");
 
     xhr.onreadystatechange = function () {
       if (xhr.readyState !== 4) return;
@@ -968,7 +1011,10 @@ function runImmediateAutoUpdate(section_id) {
       reject(new Error("Сетевая ошибка"));
     };
 
-    xhr.send(section_id);
+    xhr.send(JSON.stringify({
+      section_id: section_id,
+      blocked_urls: readBlockedUrlsRaw(section_id)
+    }));
   });
 }
 
