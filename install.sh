@@ -30,6 +30,7 @@ fi
 mkdir -p /www/cgi-bin
 mkdir -p /www/luci-static/resources/view/podkop
 mkdir -p /usr/share/rpcd/acl.d
+mkdir -p /usr/bin
 
 if [ -f /www/luci-static/resources/view/podkop/section.js ] && [ ! -f /www/luci-static/resources/view/podkop/section.js.backup ]; then
   cp /www/luci-static/resources/view/podkop/section.js /www/luci-static/resources/view/podkop/section.js.backup
@@ -54,6 +55,18 @@ chmod 644 /www/luci-static/resources/view/podkop/subscribe-loader.js 2>/dev/null
 
 wget -q -O /usr/share/rpcd/acl.d/luci-app-podkop-subscribe.json "${BASE_URL}/usr/share/rpcd/acl.d/luci-app-podkop-subscribe.json"
 
+wget -q -O /usr/bin/podkop-subscribe-autoupdate "${BASE_URL}/usr/bin/podkop-subscribe-autoupdate"
+chmod +x /usr/bin/podkop-subscribe-autoupdate
+
+CRON_LINE="*/5 * * * * /usr/bin/podkop-subscribe-autoupdate >/dev/null 2>&1"
+CRON_FILE="/etc/crontabs/root"
+if [ -f "$CRON_FILE" ]; then
+  grep -Fq "/usr/bin/podkop-subscribe-autoupdate" "$CRON_FILE" || echo "$CRON_LINE" >> "$CRON_FILE"
+else
+  echo "$CRON_LINE" > "$CRON_FILE"
+fi
+/etc/init.d/cron restart >/dev/null 2>&1 || true
+
 /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 
 echo ""
@@ -63,6 +76,10 @@ echo "=========================================="
 echo ""
 echo "For XHTTP/REALITY in Outbound mode install sing-box-extended:"
 echo "https://github.com/EikeiDev/OpenWRT-sing-box-extended?tab=readme-ov-file"
+echo ""
+echo "Auto-update scheduler installed:"
+echo "- Cron: every 5 minutes"
+echo "- Real interval and priorities are configured per section in LuCI"
 echo ""
 echo "Open LuCI: Services -> Podkop"
 echo ""

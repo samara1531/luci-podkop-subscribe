@@ -1378,6 +1378,74 @@ function enhanceSectionWithSubscribe(section) {
     return validation.message;
   };
 
+  // Auto update settings for subscribe-driven modes
+  o = section.option(
+    form.Flag,
+    "subscribe_auto_update",
+    _("Auto Update Subscribe"),
+    _("Periodically refresh subscription, test latency and auto-select best configs")
+  );
+  o.depends("proxy_config_type", "url");
+  o.depends("proxy_config_type", "urltest");
+  o.depends("proxy_config_type", "selector");
+  o.depends("proxy_config_type", "outbound");
+  o.default = "0";
+  o.rmempty = false;
+
+  o = section.option(
+    form.ListValue,
+    "subscribe_update_interval",
+    _("Update Interval"),
+    _("How often to refresh configs and re-evaluate best server")
+  );
+  o.depends("subscribe_auto_update", "1");
+  o.value("15m", _("Every 15 minutes"));
+  o.value("30m", _("Every 30 minutes"));
+  o.value("1h", _("Every 1 hour"));
+  o.value("3h", _("Every 3 hours"));
+  o.value("6h", _("Every 6 hours"));
+  o.value("12h", _("Every 12 hours"));
+  o.value("24h", _("Every 24 hours"));
+  o.default = "1h";
+  o.rmempty = false;
+
+  o = section.option(
+    form.Value,
+    "subscribe_priority_rules",
+    _("Priority Rules"),
+    _("Comma-separated rules: keyword=score (example: us=200,uk=100,slow=-300)")
+  );
+  o.depends("subscribe_auto_update", "1");
+  o.placeholder = "us=200,uk=150,ru=-200";
+  o.rmempty = true;
+
+  o = section.option(
+    form.Value,
+    "subscribe_exclude_keywords",
+    _("Exclude Keywords"),
+    _("Comma-separated keywords; matching configs are ignored")
+  );
+  o.depends("subscribe_auto_update", "1");
+  o.placeholder = "test,free,trial";
+  o.rmempty = true;
+
+  o = section.option(
+    form.Value,
+    "subscribe_max_configs",
+    _("Max Configs"),
+    _("Limit number of configs used by auto-update in URLTest/Selector")
+  );
+  o.depends("subscribe_auto_update", "1");
+  o.default = "20";
+  o.rmempty = false;
+  o.validate = function (section_id, value) {
+    if (!value || value.length === 0) return true;
+    if (/^[0-9]+$/.test(value) && parseInt(value, 10) >= 1 && parseInt(value, 10) <= 200) {
+      return true;
+    }
+    return _("Must be a number in range 1-200");
+  };
+
   // Fetch button for URL mode
   o = section.option(
     form.Button,

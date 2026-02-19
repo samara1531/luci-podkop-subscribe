@@ -1,0 +1,309 @@
+#!/bin/sh
+# Auto-update Podkop subscribe configs:
+# - refresh subscription
+# - ping hosts
+# - apply keyword-based priorities/exclusions
+# - set best config for URL mode and lists for URLTest/Selector
+
+set -e
+
+STATE_DIR="/tmp/podkop-subscribe-autoupdate"
+TMP_ROOT="/tmp/podkop-subscribe-autoupdate-work"
+mkdir -p "$STATE_DIR" "$TMP_ROOT"
+
+to_lower() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+trim() {
+    # shellcheck disable=SC2001
+    printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+url_decode() {
+    printf '%b' "$(printf '%s' "$1" | sed 's/+/ /g;s/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')" 2>/dev/null || printf '%s' "$1"
+}
+
+interval_to_seconds() {
+    case "$1" in
+        *m) printf '%s' "$(( ${1%m} * 60 ))" ;;
+        *h) printf '%s' "$(( ${1%h} * 3600 ))" ;;
+        *d) printf '%s' "$(( ${1%d} * 86400 ))" ;;
+        *)  printf '3600' ;;
+    esac
+}
+
+should_run_now() {
+    section="$1"
+    interval="$2"
+    now="$(date +%s)"
+    last_file="$STATE_DIR/$section.last"
+    sec="$(interval_to_seconds "$interval")"
+    [ -z "$sec" ] && sec=3600
+    [ "$sec" -le 0 ] && sec=3600
+    [ ! -f "$last_file" ] && return 0
+    last="$(cat "$last_file" 2>/dev/null || echo 0)"
+    [ -z "$last" ] && last=0
+    [ $((now - last)) -ge "$sec" ]
+}
+
+mark_run_now() {
+    section="$1"
+    date +%s > "$STATE_DIR/$section.last"
+}
+
+extract_title() {
+    line="$1"
+    title="$(printf '%s' "$line" | sed -n 's/.*#\(.*\)$/\1/p')"
+    [ -z "$title" ] && title="$2"
+    url_decode "$title"
+}
+
+extract_host() {
+    url="$1"
+    case "$url" in
+        vless://*|trojan://*|hy2://*|hysteria2://*|socks://*|socks4://*|socks5://*)
+            core="${url#*://}"
+            case "$core" in
+                *@*) core="${core#*@}" ;;
+            esac
+            core="$(printf '%s' "$core" | sed 's/[\/?#].*$//')"
+            if printf '%s' "$core" | grep -qE '^\[[^]]+\]:'; then
+                printf '%s' "$core" | sed 's/^\[\([^]]*\)\].*$/\1/'
+            else
+                printf '%s' "$core" | sed 's/:.*$//'
+            fi
+            ;;
+        ss://*)
+            core="${url#ss://}"
+            case "$core" in
+                *@*)
+                    core="${core#*@}"
+                    core="$(printf '%s' "$core" | sed 's/[\/?#].*$//')"
+                    printf '%s' "$core" | sed 's/:.*$//'
+                    ;;
+                *)
+                    enc="$(printf '%s' "$core" | sed 's/[\/?#].*$//')"
+                    dec="$(printf '%s' "$enc" | base64 -d 2>/dev/null || true)"
+                    if printf '%s' "$dec" | grep -q '@'; then
+                        hostpart="${dec#*@}"
+                        printf '%s' "$hostpart" | sed 's/:.*$//'
+                    else
+                        printf ''
+                    fi
+                    ;;
+            esac
+            ;;
+        *)
+            printf ''
+            ;;
+    esac
+}
+
+ping_latency() {
+    host="$1"
+    [ -z "$host" ] && { printf '999999'; return; }
+    line="$(ping -c 1 -W 1 "$host" 2>/dev/null | sed -n 's/.*time=\([0-9.]*\).*/\1/p' | head -n1)"
+    [ -z "$line" ] && { printf '999999'; return; }
+    printf '%s' "$line" | awk -F. '{print $1}'
+}
+
+is_excluded() {
+    text="$1"
+    excludes="$2"
+    ltext="$(to_lower "$text")"
+    IFS=','
+    for item in $excludes; do
+        key="$(trim "$item")"
+        [ -z "$key" ] && continue
+        lkey="$(to_lower "$key")"
+        case "$ltext" in
+            *"$lkey"*) unset IFS; return 0 ;;
+        esac
+    done
+    unset IFS
+    return 1
+}
+
+priority_score() {
+    text="$1"
+    rules="$2"
+    score=0
+    ltext="$(to_lower "$text")"
+    IFS=','
+    for rule in $rules; do
+        pair="$(trim "$rule")"
+        [ -z "$pair" ] && continue
+        key="$(trim "${pair%%=*}")"
+        val="$(trim "${pair#*=}")"
+        [ -z "$key" ] && continue
+        [ "$pair" = "$key" ] && continue
+        case "$val" in
+            ''|*[!0-9-]*)
+                continue
+                ;;
+        esac
+        lkey="$(to_lower "$key")"
+        case "$ltext" in
+            *"$lkey"*) score=$((score + val)) ;;
+        esac
+    done
+    unset IFS
+    printf '%s' "$score"
+}
+
+fetch_subscription_lines() {
+    sub_url="$1"
+    out_file="$2"
+    raw_file="$TMP_ROOT/raw.$$"
+    dec_file="$TMP_ROOT/dec.$$"
+    : > "$out_file"
+
+    if ! wget -q -O "$raw_file" --timeout=30 --user-agent="v2rayNG" "$sub_url" 2>/dev/null; then
+        rm -f "$raw_file" "$dec_file"
+        return 1
+    fi
+    if [ ! -s "$raw_file" ]; then
+        rm -f "$raw_file" "$dec_file"
+        return 1
+    fi
+    if ! base64 -d "$raw_file" > "$dec_file" 2>/dev/null; then
+        rm -f "$raw_file" "$dec_file"
+        return 1
+    fi
+
+    idx=1
+    while IFS= read -r line || [ -n "$line" ]; do
+        clean="$(printf '%s' "$line" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+        [ -z "$clean" ] && continue
+        case "$clean" in
+            vless://*|ss://*|trojan://*|hy2://*|hysteria2://*|socks://*|socks4://*|socks5://*)
+                title="$(extract_title "$clean" "Config $idx")"
+                printf '%s\t%s\n' "$clean" "$title" >> "$out_file"
+                idx=$((idx + 1))
+                ;;
+        esac
+    done < "$dec_file"
+
+    rm -f "$raw_file" "$dec_file"
+    [ -s "$out_file" ]
+}
+
+apply_mode_url() {
+    section="$1"
+    best_url="$2"
+    [ -z "$best_url" ] && return
+    uci -q set "podkop.$section.proxy_string=$best_url"
+}
+
+apply_mode_list() {
+    section="$1"
+    list_option="$2"
+    ranked_file="$3"
+    max_items="$4"
+    count=0
+
+    uci -q delete "podkop.$section.$list_option" || true
+    while IFS="$(printf '\t')" read -r _score _lat url _title; do
+        [ -z "$url" ] && continue
+        uci -q add_list "podkop.$section.$list_option=$url"
+        count=$((count + 1))
+        [ "$count" -ge "$max_items" ] && break
+    done < "$ranked_file"
+}
+
+process_section() {
+    section="$1"
+
+    connection_type="$(uci -q get "podkop.$section.connection_type" || echo '')"
+    [ "$connection_type" = "proxy" ] || return 0
+
+    auto="$(uci -q get "podkop.$section.subscribe_auto_update" || echo '0')"
+    [ "$auto" = "1" ] || return 0
+
+    interval="$(uci -q get "podkop.$section.subscribe_update_interval" || echo '1h')"
+    should_run_now "$section" "$interval" || return 0
+
+    mode="$(uci -q get "podkop.$section.proxy_config_type" || echo 'url')"
+    case "$mode" in
+        url|urltest|selector|outbound) ;;
+        *) mark_run_now "$section"; return 0 ;;
+    esac
+
+    if [ "$mode" = "outbound" ]; then
+        sub_url="$(uci -q get "podkop.$section.subscribe_url_outbound" || echo '')"
+    else
+        sub_url="$(uci -q get "podkop.$section.subscribe_url" || echo '')"
+    fi
+    [ -n "$sub_url" ] || { mark_run_now "$section"; return 0; }
+
+    priority_rules="$(uci -q get "podkop.$section.subscribe_priority_rules" || echo '')"
+    exclude_keywords="$(uci -q get "podkop.$section.subscribe_exclude_keywords" || echo '')"
+    max_items="$(uci -q get "podkop.$section.subscribe_max_configs" || echo '20')"
+    case "$max_items" in
+        ''|*[!0-9]*) max_items=20 ;;
+    esac
+    [ "$max_items" -lt 1 ] && max_items=20
+    [ "$max_items" -gt 200 ] && max_items=200
+
+    lines_file="$TMP_ROOT/lines.$section.$$"
+    ranked_file="$TMP_ROOT/ranked.$section.$$"
+    : > "$lines_file"
+    : > "$ranked_file"
+
+    if ! fetch_subscription_lines "$sub_url" "$lines_file"; then
+        rm -f "$lines_file" "$ranked_file"
+        mark_run_now "$section"
+        return 0
+    fi
+
+    while IFS="$(printf '\t')" read -r url title; do
+        [ -z "$url" ] && continue
+        text="$title $url"
+        if is_excluded "$text" "$exclude_keywords"; then
+            continue
+        fi
+        score="$(priority_score "$text" "$priority_rules")"
+        host="$(extract_host "$url")"
+        lat="$(ping_latency "$host")"
+        printf '%s\t%s\t%s\t%s\n' "$score" "$lat" "$url" "$title" >> "$ranked_file"
+    done < "$lines_file"
+
+    if [ ! -s "$ranked_file" ]; then
+        rm -f "$lines_file" "$ranked_file"
+        mark_run_now "$section"
+        return 0
+    fi
+
+    sort -t "$(printf '\t')" -k1,1nr -k2,2n "$ranked_file" -o "$ranked_file"
+
+    case "$mode" in
+        url)
+            best_url="$(head -n1 "$ranked_file" | cut -f3)"
+            apply_mode_url "$section" "$best_url"
+            ;;
+        urltest)
+            apply_mode_list "$section" "urltest_proxy_links" "$ranked_file" "$max_items"
+            ;;
+        selector)
+            apply_mode_list "$section" "selector_proxy_links" "$ranked_file" "$max_items"
+            ;;
+        outbound)
+            # Outbound uses manual JSON apply in LuCI; we only refresh timing state.
+            ;;
+    esac
+
+    rm -f "$lines_file" "$ranked_file"
+    mark_run_now "$section"
+}
+
+sections="$(uci -q show podkop 2>/dev/null | sed -n 's/^podkop\.\([^.=]*\)=section$/\1/p')"
+[ -n "$sections" ] || exit 0
+
+for sec in $sections; do
+    process_section "$sec" || true
+done
+
+uci -q commit podkop || true
+
+exit 0
