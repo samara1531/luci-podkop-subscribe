@@ -408,7 +408,7 @@ function buildManualConfigs(manualLinks) {
     if (!protocol) continue;
     out.push({
       url: url,
-      title: extractTitleFromProxyUrl(url, _("Manual Config") + " " + (out.length + 1)),
+      title: extractTitleFromProxyUrl(url, _("Ручная конфигурация") + " " + (out.length + 1)),
       protocol: protocol
     });
   }
@@ -426,7 +426,7 @@ function mergeConfigsWithManual(configs, manualLinks) {
     seen[url] = true;
     merged.push({
       url: url,
-      title: item.title || extractTitleFromProxyUrl(url, _("Config")),
+      title: item.title || extractTitleFromProxyUrl(url, _("Конфиг")),
       protocol: item.protocol || detectProtocolFromProxyUrl(url) || ""
     });
   }
@@ -579,10 +579,10 @@ function decodeComponent(value) {
 
 function parseVlessConfigUrl(vlessUrl) {
   if (!vlessUrl || typeof vlessUrl !== "string") {
-    throw new Error(_("Empty config URL"));
+    throw new Error(_("Пустой URL конфигурации"));
   }
   if (!/^vless:\/\//i.test(vlessUrl)) {
-    throw new Error(_("Only vless:// URLs are supported for outbound conversion"));
+    throw new Error(_("Для преобразования в outbound поддерживаются только URL vless://"));
   }
 
   var parsed = new URL(vlessUrl);
@@ -591,16 +591,16 @@ function parseVlessConfigUrl(vlessUrl) {
   var uuid = decodeComponent(parsed.username || "");
   var server = decodeComponent(parsed.hostname || "");
   var port = parseInt(parsed.port || "443", 10);
-  var tag = decodeComponent((parsed.hash || "").replace(/^#/, "")) || _("VLESS outbound");
+  var tag = decodeComponent((parsed.hash || "").replace(/^#/, "")) || _("VLESS outbound-конфиг");
 
   if (!uuid) {
-    throw new Error(_("UUID was not found in URL"));
+    throw new Error(_("В URL не найден UUID"));
   }
   if (!server) {
-    throw new Error(_("Server was not found in URL"));
+    throw new Error(_("В URL не найден адрес сервера"));
   }
   if (isNaN(port) || port < 1 || port > 65535) {
-    throw new Error(_("Invalid server port"));
+    throw new Error(_("Некорректный порт сервера"));
   }
 
   var transportType = decodeComponent(params.get("type") || "tcp");
@@ -696,7 +696,7 @@ function findOutboundTextarea(section_id) {
 function setOutboundTextareaValue(section_id, outboundData) {
   var outboundTextarea = findOutboundTextarea(section_id);
   if (!outboundTextarea) {
-    throw new Error(_("Could not find Outbound Configuration field"));
+    throw new Error(_("Не удалось найти поле Outbound Configuration"));
   }
 
   outboundTextarea.value = JSON.stringify(outboundData, null, 2);
@@ -1163,20 +1163,20 @@ function renderImmediateAutoUpdateLog(section_id, result, isError, ev) {
 
   var lines = [];
   if (isError) {
-    lines.push("Status: error");
-    lines.push("Details: " + (result && result.message ? result.message : "failed"));
+    lines.push("Статус: ошибка");
+    lines.push("Детали: " + (result && result.message ? result.message : "сбой"));
   } else {
     updateSectionPingCache(section_id, result);
-    lines.push("Status: " + (result.status || "ok"));
-    if (result.mode) lines.push("Mode: " + result.mode);
-    if (result.total != null) lines.push("Found configs: " + result.total);
-    if (result.eligible != null) lines.push("Eligible: " + result.eligible);
-    if (result.excluded != null) lines.push("Excluded: " + result.excluded);
-    if (result.best_title) lines.push("Best: " + result.best_title);
-    if (result.changed != null) lines.push("Changed: " + (String(result.changed) === "1" ? "yes" : "no"));
-    if (result.applied != null) lines.push("Applied entries: " + result.applied);
-    if (result.note) lines.push("Note: " + result.note);
-    if (result.reason) lines.push("Reason: " + result.reason);
+    lines.push("Статус: " + (result.status || "ok"));
+    if (result.mode) lines.push("Режим: " + result.mode);
+    if (result.total != null) lines.push("Найдено конфигов: " + result.total);
+    if (result.eligible != null) lines.push("Подходящих: " + result.eligible);
+    if (result.excluded != null) lines.push("Исключено: " + result.excluded);
+    if (result.best_title) lines.push("Лучший: " + result.best_title);
+    if (result.changed != null) lines.push("Изменено: " + (String(result.changed) === "1" ? "да" : "нет"));
+    if (result.applied != null) lines.push("Применено записей: " + result.applied);
+    if (result.note) lines.push("Примечание: " + result.note);
+    if (result.reason) lines.push("Причина: " + result.reason);
 
     var topLines = [];
     for (var i = 1; i <= 5; i++) {
@@ -1187,7 +1187,7 @@ function renderImmediateAutoUpdateLog(section_id, result, isError, ev) {
       }
     }
     if (topLines.length > 0) {
-      lines.push("Top by ping:");
+      lines.push("Топ по пингу:");
       lines = lines.concat(topLines);
     }
   }
@@ -1562,7 +1562,7 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
     pingLabel.className = "podkop-subscribe-ping";
     var pingValue = entry.ping;
     if (pingValue != null && pingValue !== "") {
-      pingLabel.textContent = String(pingValue) === "999999" ? "timeout" : (pingValue + " ms");
+      pingLabel.textContent = String(pingValue) === "999999" ? "таймаут" : (pingValue + " ms");
       if (String(pingValue) === "999999") {
         pingLabel.classList.add("bad");
       }
@@ -1957,7 +1957,7 @@ function createOutboundClickHandlerEnhanced(config, configItem, configList, sect
         loadingText.parentNode.removeChild(loadingText);
       }
       var parseErrorDiv = createErrorMessage(
-        _("Failed to convert URL to outbound JSON: ") + parseErr.message,
+        _("Не удалось преобразовать URL в outbound JSON: ") + parseErr.message,
         true
       );
       configItem.appendChild(parseErrorDiv);
@@ -2301,8 +2301,8 @@ function enhanceSectionWithSubscribe(section) {
   var o = section.option(
     form.Value,
     "subscribe_url",
-    _("Subscribe URL"),
-    _("Введите Subscribe URL для получения конфигураций")
+    _("URL подписки"),
+    _("Введите URL подписки для получения конфигураций")
   );
   o.depends("proxy_config_type", "url");
   o.depends("proxy_config_type", "urltest");
@@ -2325,8 +2325,8 @@ function enhanceSectionWithSubscribe(section) {
   o = section.option(
     form.DynamicList,
     "subscribe_urls_extra",
-    _("Extra Subscribe URLs"),
-    _("Click + to add multiple subscription URLs")
+    _("Дополнительные URL подписки"),
+    _("Нажмите +, чтобы добавить несколько URL подписки")
   );
   o.depends("proxy_config_type", "url");
   o.depends("proxy_config_type", "urltest");
@@ -2347,8 +2347,8 @@ function enhanceSectionWithSubscribe(section) {
   o = section.option(
     form.DynamicList,
     "subscribe_manual_links",
-    _("Manual Config Links"),
-    _("Add direct proxy links (vless://, ss://, trojan://, hy2://, socks://)")
+    _("Ручные ссылки конфигов"),
+    _("Добавьте прямые прокси-ссылки (vless://, ss://, trojan://, hy2://, socks://)")
   );
   o.depends("proxy_config_type", "url");
   o.depends("proxy_config_type", "urltest");
@@ -2363,15 +2363,15 @@ function enhanceSectionWithSubscribe(section) {
     if (/^(vless|ss|trojan|hy2|hysteria2|socks|socks4|socks5):\/\//i.test(value)) {
       return true;
     }
-    return _("Only direct proxy links are allowed (vless://, ss://, trojan://, hy2://, socks://)");
+    return _("Разрешены только прямые прокси-ссылки (vless://, ss://, trojan://, hy2://, socks://)");
   };
 
   // Auto update settings for subscribe-driven modes
   o = section.option(
     form.Flag,
     "subscribe_auto_update",
-    _("Auto Update Subscribe"),
-    _("Periodically refresh subscription, test latency and auto-select best configs")
+    _("Автообновление подписки"),
+    _("Периодически обновлять подписку, проверять задержку и автоматически выбирать лучшие конфиги")
   );
   o.depends("proxy_config_type", "url");
   o.depends("proxy_config_type", "urltest");
@@ -2383,25 +2383,25 @@ function enhanceSectionWithSubscribe(section) {
   o = section.option(
     form.ListValue,
     "subscribe_update_interval",
-    _("Update Interval"),
-    _("How often to refresh configs and re-evaluate best server")
+    _("Интервал обновления"),
+    _("Как часто обновлять конфиги и переоценивать лучший сервер")
   );
   o.depends("subscribe_auto_update", "1");
-  o.value("15m", _("Every 15 minutes"));
-  o.value("30m", _("Every 30 minutes"));
-  o.value("1h", _("Every 1 hour"));
-  o.value("3h", _("Every 3 hours"));
-  o.value("6h", _("Every 6 hours"));
-  o.value("12h", _("Every 12 hours"));
-  o.value("24h", _("Every 24 hours"));
+  o.value("15m", _("Каждые 15 минут"));
+  o.value("30m", _("Каждые 30 минут"));
+  o.value("1h", _("Каждый 1 час"));
+  o.value("3h", _("Каждые 3 часа"));
+  o.value("6h", _("Каждые 6 часов"));
+  o.value("12h", _("Каждые 12 часов"));
+  o.value("24h", _("Каждые 24 часа"));
   o.default = "1h";
   o.rmempty = false;
 
   o = section.option(
     form.Value,
     "subscribe_blocked_urls",
-    _("Blocked Config URLs"),
-    _("Managed by buttons in config list; do not edit manually")
+    _("URL заблокированных конфигов"),
+    _("Управляется кнопками в списке конфигов; не редактируйте вручную")
   );
   o.depends("subscribe_auto_update", "1");
   o.rmempty = true;
@@ -2409,8 +2409,8 @@ function enhanceSectionWithSubscribe(section) {
   o = section.option(
     form.Value,
     "subscribe_max_configs",
-    _("Max Configs"),
-    _("Limit number of configs used by auto-update in URLTest/Selector")
+    _("Максимум конфигов"),
+    _("Ограничить количество конфигов, используемых автообновлением в URLTest/Selector")
   );
   o.depends("subscribe_auto_update", "1");
   o.default = "20";
@@ -2420,26 +2420,26 @@ function enhanceSectionWithSubscribe(section) {
     if (/^[0-9]+$/.test(value) && parseInt(value, 10) >= 1 && parseInt(value, 10) <= 200) {
       return true;
     }
-    return _("Must be a number in range 1-200");
+    return _("Должно быть число в диапазоне 1-200");
   };
 
   o = section.option(
     form.Button,
     "subscribe_run_now",
-    _("Update Now"),
-    _("Run subscription refresh, ping test and best-server selection immediately")
+    _("Обновить сейчас"),
+    _("Сразу запустить обновление подписки, пинг-тест и выбор лучшего сервера")
   );
   o.depends("proxy_config_type", "url");
   o.depends("proxy_config_type", "urltest");
   o.depends("proxy_config_type", "selector");
   o.depends("proxy_config_type", "outbound");
-  o.inputtitle = _("Update Now");
+  o.inputtitle = _("Обновить сейчас");
   o.inputstyle = "apply";
   o.onclick = function (ev, section_id) {
     if (ev && ev.preventDefault) ev.preventDefault();
     if (ev && ev.stopPropagation) ev.stopPropagation();
 
-    ui.addNotification(null, E("p", {}, _("Running immediate auto-update...")), "info");
+    ui.addNotification(null, E("p", {}, _("Запуск немедленного автообновления...")), "info");
 
     runImmediateAutoUpdate(section_id).then(function (result) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
@@ -2449,7 +2449,7 @@ function enhanceSectionWithSubscribe(section) {
       var finalize = function () {
         renderImmediateAutoUpdateLog(section_id, finalResult, false, ev);
         autoLoadCachedConfigs(section_id, effectiveMode);
-        ui.addNotification(null, E("p", {}, _("Auto-update completed.")), "info");
+        ui.addNotification(null, E("p", {}, _("Автообновление завершено.")), "info");
       };
 
       if (effectiveMode === "outbound" && finalResult.best_url) {
@@ -2467,7 +2467,7 @@ function enhanceSectionWithSubscribe(section) {
             finalResult.note = "outbound_best_found_but_backend_apply_failed";
             finalResult.apply_error = applyErr && applyErr.message ? applyErr.message : String(applyErr || "");
             renderImmediateAutoUpdateLog(section_id, finalResult, true, ev);
-            ui.addNotification(null, E("p", {}, _("Auto-update finished but apply failed: ") + finalResult.apply_error), "warning");
+            ui.addNotification(null, E("p", {}, _("Автообновление завершено, но применение не удалось: ") + finalResult.apply_error), "warning");
           });
           return;
         } catch (e) {
@@ -2478,7 +2478,7 @@ function enhanceSectionWithSubscribe(section) {
       finalize();
     }).catch(function (err) {
       renderImmediateAutoUpdateLog(section_id, { message: err.message }, true, ev);
-      ui.addNotification(null, E("p", {}, _("Auto-update failed: ") + err.message), "warning");
+      ui.addNotification(null, E("p", {}, _("Ошибка автообновления: ") + err.message), "warning");
     });
 
     return false;
@@ -2487,20 +2487,20 @@ function enhanceSectionWithSubscribe(section) {
   o = section.option(
     form.Button,
     "subscribe_ping_now",
-    _("Ping Test"),
-    _("Test latency for all subscription configs without applying the best server")
+    _("Пинг-тест"),
+    _("Проверить задержку для всех конфигов подписки без применения лучшего сервера")
   );
   o.depends("proxy_config_type", "url");
   o.depends("proxy_config_type", "urltest");
   o.depends("proxy_config_type", "selector");
   o.depends("proxy_config_type", "outbound");
-  o.inputtitle = _("Ping Test");
+  o.inputtitle = _("Пинг-тест");
   o.inputstyle = "action";
   o.onclick = function (ev, section_id) {
     if (ev && ev.preventDefault) ev.preventDefault();
     if (ev && ev.stopPropagation) ev.stopPropagation();
 
-    ui.addNotification(null, E("p", {}, _("Running ping test...")), "info");
+    ui.addNotification(null, E("p", {}, _("Запуск пинг-теста...")), "info");
 
     runImmediatePingTest(section_id, false).then(function (result) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
@@ -2521,14 +2521,14 @@ function enhanceSectionWithSubscribe(section) {
   o = section.option(
     form.Button,
     "subscribe_ping_now_all",
-    _("Ping Test All"),
-    _("Test latency for all configs from sources (may be slower on huge lists)")
+    _("Пинг-тест всех"),
+    _("Проверить задержку для всех конфигов из источников (на больших списках может быть медленнее)")
   );
   o.depends("proxy_config_type", "url");
   o.depends("proxy_config_type", "urltest");
   o.depends("proxy_config_type", "selector");
   o.depends("proxy_config_type", "outbound");
-  o.inputtitle = _("Ping Test All");
+  o.inputtitle = _("Пинг-тест всех");
   o.inputstyle = "action";
   o.onclick = function (ev, section_id) {
     if (ev && ev.preventDefault) ev.preventDefault();
@@ -2571,7 +2571,7 @@ function enhanceSectionWithSubscribe(section) {
     var sources = buildSubscribeSources(section_id, false);
 
     if (!hasAnySubscribeSources(sources)) {
-      ui.addNotification(null, E("p", {}, _("Add at least one Subscribe URL or manual config link")));
+      ui.addNotification(null, E("p", {}, _("Добавьте хотя бы один URL подписки или ручную ссылку конфига")));
       return false;
     }
 
@@ -2615,7 +2615,7 @@ function enhanceSectionWithSubscribe(section) {
     var sources = buildSubscribeSources(section_id, false);
 
     if (!hasAnySubscribeSources(sources)) {
-      ui.addNotification(null, E("p", {}, _("Add at least one Subscribe URL or manual config link")));
+      ui.addNotification(null, E("p", {}, _("Добавьте хотя бы один URL подписки или ручную ссылку конфига")));
       return false;
     }
 
@@ -2659,7 +2659,7 @@ function enhanceSectionWithSubscribe(section) {
     var sources = buildSubscribeSources(section_id, false);
 
     if (!hasAnySubscribeSources(sources)) {
-      ui.addNotification(null, E("p", {}, _("Add at least one Subscribe URL or manual config link")));
+      ui.addNotification(null, E("p", {}, _("Добавьте хотя бы один URL подписки или ручную ссылку конфига")));
       return false;
     }
 
@@ -2689,8 +2689,8 @@ function enhanceSectionWithSubscribe(section) {
   o = section.option(
     form.Value,
     "subscribe_url_outbound",
-    _("Subscribe URL"),
-    _("Введите Subscribe URL для получения конфигураций")
+    _("URL подписки"),
+    _("Введите URL подписки для получения конфигураций")
   );
   o.depends("proxy_config_type", "outbound");
   o.placeholder = "https://example.com/subscribe";
@@ -2710,8 +2710,8 @@ function enhanceSectionWithSubscribe(section) {
   o = section.option(
     form.DynamicList,
     "subscribe_urls_extra_outbound",
-    _("Extra Subscribe URLs"),
-    _("Click + to add multiple subscription URLs for outbound mode")
+    _("Дополнительные URL подписки"),
+    _("Нажмите +, чтобы добавить несколько URL подписки для режима outbound")
   );
   o.depends("proxy_config_type", "outbound");
   o.placeholder = "https://example.com/subscribe2";
@@ -2747,7 +2747,7 @@ function enhanceSectionWithSubscribe(section) {
     if (!hasAnySubscribeSources(sources)) {
       ui.addNotification(
         null,
-        E("p", {}, _("Add at least one Subscribe URL or manual config link"))
+        E("p", {}, _("Добавьте хотя бы один URL подписки или ручную ссылку конфига"))
       );
       return false;
     }
