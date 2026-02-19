@@ -1074,10 +1074,10 @@ function getCurrentProxyConfigType(section_id) {
 
 function triggerSaveApply() {
   var applyBtn =
-    document.querySelector("button.cbi-button-apply") ||
-    document.querySelector("input.cbi-button-apply") ||
     document.querySelector('button[name="cbi.apply"]') ||
-    document.querySelector('input[name="cbi.apply"]');
+    document.querySelector('input[name="cbi.apply"]') ||
+    document.querySelector(".cbi-page-actions button.cbi-button-apply") ||
+    document.querySelector(".cbi-page-actions input.cbi-button-apply");
 
   if (!applyBtn || applyBtn.disabled) {
     return false;
