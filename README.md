@@ -1,7 +1,5 @@
 # luci-podkop-subscribe
 
-![luci-podkop-subscribe](img.png)
-
 LuCI extension for Podkop with subscription import, manual proxy links, ping test, and auto-selection.
 
 ## Requirements
