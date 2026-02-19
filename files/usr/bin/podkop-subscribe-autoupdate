@@ -42,6 +42,16 @@ to_lower() {
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
+is_supported_proxy_url() {
+    lower="$(to_lower "$1")"
+    case "$lower" in
+        vless://*|ss://*|trojan://*|hy2://*|hysteria2://*|socks://*|socks4://*|socks5://*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
 trim() {
     # shellcheck disable=SC2001
     printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
@@ -221,13 +231,11 @@ fetch_subscription_lines() {
     while IFS= read -r line || [ -n "$line" ]; do
         clean="$(printf '%s' "$line" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         [ -z "$clean" ] && continue
-        case "$clean" in
-            vless://*|ss://*|trojan://*|hy2://*|hysteria2://*|socks://*|socks4://*|socks5://*)
-                title="$(extract_title "$clean" "Config $idx")"
-                printf '%s\t%s\n' "$clean" "$title" >> "$out_file"
-                idx=$((idx + 1))
-                ;;
-        esac
+        if is_supported_proxy_url "$clean"; then
+            title="$(extract_title "$clean" "Config $idx")"
+            printf '%s\t%s\n' "$clean" "$title" >> "$out_file"
+            idx=$((idx + 1))
+        fi
     done < "$dec_file"
 
     rm -f "$raw_file" "$dec_file"
@@ -242,20 +250,25 @@ append_manual_lines() {
     [ -z "$manual_lines" ] && return 1
 
     appended=0
+    manual_total=0
+    manual_supported=0
     while IFS= read -r line || [ -n "$line" ]; do
         clean="$(printf '%s' "$line" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         [ -z "$clean" ] && continue
-        case "$clean" in
-            vless://*|ss://*|trojan://*|hy2://*|hysteria2://*|socks://*|socks4://*|socks5://*)
-                title="$(extract_title "$clean" "Manual $idx")"
-                printf '%s\t%s\n' "$clean" "$title" >> "$out_file"
-                idx=$((idx + 1))
-                appended=1
-                ;;
-        esac
+        manual_total=$((manual_total + 1))
+        if is_supported_proxy_url "$clean"; then
+            title="$(extract_title "$clean" "Manual $idx")"
+            printf '%s\t%s\n' "$clean" "$title" >> "$out_file"
+            idx=$((idx + 1))
+            appended=1
+            manual_supported=$((manual_supported + 1))
+        fi
     done <<EOF
 $manual_lines
 EOF
+
+    MANUAL_TOTAL="$manual_total"
+    MANUAL_SUPPORTED="$manual_supported"
 
     [ "$appended" -eq 1 ]
 }
@@ -377,6 +390,8 @@ process_section() {
     applied_count=0
     note=""
     status="ok"
+    MANUAL_TOTAL=0
+    MANUAL_SUPPORTED=0
 
     if [ "$FORCE_MODE" -eq 1 ] && [ -n "$FORCE_SECTION" ] && [ "$section" != "$FORCE_SECTION" ]; then
         return 0
@@ -559,9 +574,10 @@ process_section() {
     fi
 
     if [ "$FORCE_MODE" -eq 1 ]; then
-        write_status "$section" \
+    write_status "$section" \
         "status=$status" "mode=$mode" "total=$total_count" "eligible=$eligible_count" "excluded=$excluded_count" \
         "tested=$tested_count" \
+        "manual_total=$MANUAL_TOTAL" "manual_supported=$MANUAL_SUPPORTED" \
         "best_title=$(sanitize_status_value "$best_title")" "best_url=$best_url" \
         "applied=$applied_count" "changed=$changed" "note=$note"
         status_file="$STATE_DIR/$section.status"
