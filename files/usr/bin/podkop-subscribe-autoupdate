@@ -162,9 +162,9 @@ fetch_subscription_lines() {
         rm -f "$raw_file" "$dec_file"
         return 1
     fi
+    # Support both classic base64 subscriptions and plain-text lists.
     if ! base64 -d "$raw_file" > "$dec_file" 2>/dev/null; then
-        rm -f "$raw_file" "$dec_file"
-        return 1
+        cp "$raw_file" "$dec_file"
     fi
 
     idx=$(( $(wc -l < "$out_file" 2>/dev/null || echo 0) + 1 ))

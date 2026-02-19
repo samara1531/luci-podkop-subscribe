@@ -101,9 +101,9 @@ append_from_subscription_url() {
         printf '%s' "$idx"
         return 1
     fi
+    # Support both classic base64 subscriptions and plain-text lists.
     if ! base64 -d "$TMP_RAW" > "$TMP_DEC" 2>/dev/null; then
-        printf '%s' "$idx"
-        return 1
+        cp "$TMP_RAW" "$TMP_DEC"
     fi
 
     idx="$(append_from_decoded_file "$TMP_DEC" "$idx")"
