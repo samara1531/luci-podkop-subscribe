@@ -173,6 +173,31 @@ priority_score() {
     printf '%s' "$score"
 }
 
+exact_priority_score() {
+    title="$1"
+    rules="$2"
+    score=0
+    ltitle="$(to_lower "$(trim "$title")")"
+    IFS=';'
+    for rule in $rules; do
+        pair="$(trim "$rule")"
+        [ -z "$pair" ] && continue
+        key="$(trim "${pair%%=*}")"
+        val="$(trim "${pair#*=}")"
+        [ -z "$key" ] && continue
+        [ "$pair" = "$key" ] && continue
+        case "$val" in
+            ''|*[!0-9-]*)
+                continue
+                ;;
+        esac
+        lkey="$(to_lower "$key")"
+        [ "$ltitle" = "$lkey" ] && score=$((score + val))
+    done
+    unset IFS
+    printf '%s' "$score"
+}
+
 fetch_subscription_lines() {
     sub_url="$1"
     out_file="$2"
@@ -285,6 +310,7 @@ process_section() {
     fi
 
     priority_rules="$(uci -q get "podkop.$section.subscribe_priority_rules" || echo '')"
+    exact_priority_rules="$(uci -q get "podkop.$section.subscribe_priority_exact" || echo '')"
     exclude_keywords="$(uci -q get "podkop.$section.subscribe_exclude_keywords" || echo '')"
     max_items="$(uci -q get "podkop.$section.subscribe_max_configs" || echo '20')"
     case "$max_items" in
@@ -317,7 +343,9 @@ process_section() {
             continue
         fi
         eligible_count=$((eligible_count + 1))
-        score="$(priority_score "$text" "$priority_rules")"
+        exact_score="$(exact_priority_score "$title" "$exact_priority_rules")"
+        keyword_score="$(priority_score "$text" "$priority_rules")"
+        score=$((exact_score + keyword_score))
         host="$(extract_host "$url")"
         lat="$(ping_latency "$host")"
         printf '%s\t%s\t%s\t%s\n' "$score" "$lat" "$url" "$title" >> "$ranked_file"

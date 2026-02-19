@@ -1501,6 +1501,16 @@ function enhanceSectionWithSubscribe(section) {
 
   o = section.option(
     form.Value,
+    "subscribe_priority_exact",
+    _("Exact Priority"),
+    _("Exact title rules: title=score;title2=score2 (applied before ping)")
+  );
+  o.depends("subscribe_auto_update", "1");
+  o.placeholder = "United Kingdom ( AI 🤖 )=300;Finland=100";
+  o.rmempty = true;
+
+  o = section.option(
+    form.Value,
     "subscribe_exclude_keywords",
     _("Exclude Keywords"),
     _("Comma-separated keywords; matching configs are ignored")
