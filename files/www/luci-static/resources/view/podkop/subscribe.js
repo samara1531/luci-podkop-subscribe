@@ -1765,12 +1765,10 @@ function enhanceSectionWithSubscribe(section) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
       var finalResult = result || {};
       var effectiveMode = finalResult.mode || mode;
-
-      renderImmediateAutoUpdateLog(section_id, finalResult, false, ev);
+      updateSectionPingCache(section_id, finalResult);
       autoLoadCachedConfigs(section_id, effectiveMode);
       ui.addNotification(null, E("p", {}, _("Ping test completed.")), "info");
     }).catch(function (err) {
-      renderImmediateAutoUpdateLog(section_id, { message: err.message }, true, ev);
       ui.addNotification(null, E("p", {}, _("Ping test failed: ") + err.message), "warning");
     });
 

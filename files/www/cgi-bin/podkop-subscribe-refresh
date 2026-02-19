@@ -33,7 +33,10 @@ if [ $run_rc -eq 0 ]; then
     json_add_string "message" "Auto-update completed"
 
     if [ -f "$status_file" ]; then
-        while IFS='=' read -r key val; do
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            key="${line%%=*}"
+            val="${line#*=}"
             [ -z "$key" ] && continue
             json_add_string "$key" "$val"
         done < "$status_file"
