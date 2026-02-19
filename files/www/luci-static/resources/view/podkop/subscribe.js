@@ -214,6 +214,13 @@ function injectSubscribeStyles() {
 
 var sectionPingCache = {};
 
+function normalizePingTitle(title) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Remove config lists when connection type or proxy_config_type changes
 function removeConfigLists() {
   // Find all config lists by ID prefix pattern and remove them from DOM
@@ -558,14 +565,19 @@ function setBlockedUrls(section_id, urls) {
 
 function updateSectionPingCache(section_id, result) {
   if (!result) return;
-  var map = {};
+  var byUrl = {};
+  var byTitle = {};
   for (var i = 1; i <= 50; i++) {
     var url = result["top" + i + "_url"];
     var ping = result["top" + i + "_ping"];
-    if (!url) break;
-    map[url] = ping;
+    var title = result["top" + i + "_title"];
+    if (url) byUrl[url] = ping;
+    if (title) byTitle[normalizePingTitle(title)] = ping;
   }
-  sectionPingCache[section_id] = map;
+  sectionPingCache[section_id] = {
+    byUrl: byUrl,
+    byTitle: byTitle
+  };
 }
 
 function runImmediateAutoUpdate(section_id) {
@@ -926,8 +938,13 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
 
     var pingLabel = document.createElement("span");
     pingLabel.className = "podkop-subscribe-ping";
-    var pingMap = sectionPingCache[section_id] || {};
-    var pingValue = pingMap[config.url];
+    var pingCache = sectionPingCache[section_id] || {};
+    var pingByUrl = pingCache.byUrl || {};
+    var pingByTitle = pingCache.byTitle || {};
+    var pingValue = pingByUrl[config.url];
+    if (pingValue == null || pingValue === "") {
+      pingValue = pingByTitle[normalizePingTitle(config.title)];
+    }
     if (pingValue != null && pingValue !== "") {
       pingLabel.textContent = String(pingValue) === "999999" ? "timeout" : (pingValue + " ms");
       if (String(pingValue) === "999999") {
