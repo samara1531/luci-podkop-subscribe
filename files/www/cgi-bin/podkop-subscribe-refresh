@@ -1,0 +1,37 @@
+#!/bin/sh
+# Run subscribe auto-update immediately for a specific section
+
+. /usr/share/libubox/jshn.sh
+
+echo "Content-Type: application/json"
+echo ""
+
+read -r section_id
+section_id="$(printf '%s' "$section_id" | tr -d '\r\n')"
+
+if [ -z "$section_id" ]; then
+    json_init
+    json_add_string "error" "section_id is required"
+    json_dump
+    exit 1
+fi
+
+if [ ! -x /usr/bin/podkop-subscribe-autoupdate ]; then
+    json_init
+    json_add_string "error" "auto-update script is not installed"
+    json_dump
+    exit 1
+fi
+
+if /usr/bin/podkop-subscribe-autoupdate --force "$section_id" >/dev/null 2>&1; then
+    json_init
+    json_add_boolean "success" 1
+    json_add_string "message" "Auto-update completed"
+    json_dump
+    exit 0
+fi
+
+json_init
+json_add_string "error" "Auto-update failed"
+json_dump
+exit 1

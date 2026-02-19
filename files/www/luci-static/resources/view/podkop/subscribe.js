@@ -483,6 +483,38 @@ function getSubscribeUrl(ev, section_id, fieldName) {
   return "";
 }
 
+function runImmediateAutoUpdate(section_id) {
+  return new Promise(function (resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/cgi-bin/podkop-subscribe-refresh", true);
+    xhr.setRequestHeader("Content-Type", "text/plain");
+
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (xhr.status !== 200) {
+        reject(new Error("HTTP " + xhr.status));
+        return;
+      }
+      try {
+        var result = JSON.parse(xhr.responseText);
+        if (result && !result.error) {
+          resolve(result);
+        } else {
+          reject(new Error(result && result.error ? result.error : "Unknown error"));
+        }
+      } catch (e) {
+        reject(new Error("Invalid JSON response"));
+      }
+    };
+
+    xhr.onerror = function () {
+      reject(new Error("Network error"));
+    };
+
+    xhr.send(section_id);
+  });
+}
+
 // Check if should show config list
 function shouldShowConfigList() {
   try {
@@ -1428,6 +1460,35 @@ function enhanceSectionWithSubscribe(section) {
       return true;
     }
     return _("Must be a number in range 1-200");
+  };
+
+  o = section.option(
+    form.Button,
+    "subscribe_run_now",
+    _("Update Now"),
+    _("Run subscription refresh, ping test and best-server selection immediately")
+  );
+  o.depends("proxy_config_type", "url");
+  o.depends("proxy_config_type", "urltest");
+  o.depends("proxy_config_type", "selector");
+  o.depends("proxy_config_type", "outbound");
+  o.inputtitle = _("Update Now");
+  o.inputstyle = "apply";
+  o.onclick = function (ev, section_id) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+
+    ui.addNotification(null, E("p", {}, _("Running immediate auto-update...")), "info");
+
+    runImmediateAutoUpdate(section_id).then(function () {
+      var mode = getCurrentProxyConfigType(section_id) || "url";
+      autoLoadCachedConfigs(section_id, mode);
+      ui.addNotification(null, E("p", {}, _("Auto-update completed. Reload page to see applied values.")), "info");
+    }).catch(function (err) {
+      ui.addNotification(null, E("p", {}, _("Auto-update failed: ") + err.message), "warning");
+    });
+
+    return false;
   };
 
   // Fetch button for URL mode

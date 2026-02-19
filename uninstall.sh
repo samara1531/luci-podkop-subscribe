@@ -20,6 +20,7 @@ PLUGIN_REMOVED=0
 for f in \
   /www/cgi-bin/podkop-subscribe \
   /www/cgi-bin/podkop-configs-cache \
+  /www/cgi-bin/podkop-subscribe-refresh \
   /www/luci-static/resources/view/podkop/subscribe.js \
   /www/luci-static/resources/view/podkop/subscribe-loader.js \
   /usr/share/rpcd/acl.d/luci-app-podkop-subscribe.json \

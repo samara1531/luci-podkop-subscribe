@@ -44,6 +44,9 @@ chmod +x /www/cgi-bin/podkop-subscribe
 wget -q -O /www/cgi-bin/podkop-configs-cache "${BASE_URL}/www/cgi-bin/podkop-configs-cache"
 chmod +x /www/cgi-bin/podkop-configs-cache
 
+wget -q -O /www/cgi-bin/podkop-subscribe-refresh "${BASE_URL}/www/cgi-bin/podkop-subscribe-refresh"
+chmod +x /www/cgi-bin/podkop-subscribe-refresh
+
 wget -q -O /www/luci-static/resources/view/podkop/section.js "${BASE_URL}/www/luci-static/resources/view/podkop/section.js"
 chmod 644 /www/luci-static/resources/view/podkop/section.js
 
