@@ -129,75 +129,6 @@ ping_latency() {
     printf '%s' "$line" | awk -F. '{print $1}'
 }
 
-is_excluded() {
-    text="$1"
-    excludes="$2"
-    ltext="$(to_lower "$text")"
-    IFS=','
-    for item in $excludes; do
-        key="$(trim "$item")"
-        [ -z "$key" ] && continue
-        lkey="$(to_lower "$key")"
-        case "$ltext" in
-            *"$lkey"*) unset IFS; return 0 ;;
-        esac
-    done
-    unset IFS
-    return 1
-}
-
-priority_score() {
-    text="$1"
-    rules="$2"
-    score=0
-    ltext="$(to_lower "$text")"
-    IFS=','
-    for rule in $rules; do
-        pair="$(trim "$rule")"
-        [ -z "$pair" ] && continue
-        key="$(trim "${pair%%=*}")"
-        val="$(trim "${pair#*=}")"
-        [ -z "$key" ] && continue
-        [ "$pair" = "$key" ] && continue
-        case "$val" in
-            ''|*[!0-9-]*)
-                continue
-                ;;
-        esac
-        lkey="$(to_lower "$key")"
-        case "$ltext" in
-            *"$lkey"*) score=$((score + val)) ;;
-        esac
-    done
-    unset IFS
-    printf '%s' "$score"
-}
-
-exact_priority_score() {
-    title="$1"
-    rules="$2"
-    score=0
-    ltitle="$(to_lower "$(trim "$title")")"
-    IFS=';'
-    for rule in $rules; do
-        pair="$(trim "$rule")"
-        [ -z "$pair" ] && continue
-        key="$(trim "${pair%%=*}")"
-        val="$(trim "${pair#*=}")"
-        [ -z "$key" ] && continue
-        [ "$pair" = "$key" ] && continue
-        case "$val" in
-            ''|*[!0-9-]*)
-                continue
-                ;;
-        esac
-        lkey="$(to_lower "$key")"
-        [ "$ltitle" = "$lkey" ] && score=$((score + val))
-    done
-    unset IFS
-    printf '%s' "$score"
-}
-
 fetch_subscription_lines() {
     sub_url="$1"
     out_file="$2"
@@ -250,12 +181,25 @@ apply_mode_list() {
     count=0
 
     uci -q delete "podkop.$section.$list_option" || true
-    while IFS="$(printf '\t')" read -r _score _lat url _title; do
+    while IFS="$(printf '\t')" read -r _lat url _title; do
         [ -z "$url" ] && continue
         uci -q add_list "podkop.$section.$list_option=$url"
         count=$((count + 1))
         [ "$count" -ge "$max_items" ] && break
     done < "$ranked_file"
+}
+
+is_blocked_url() {
+    url="$1"
+    blocked_urls="$2"
+    IFS=','
+    for item in $blocked_urls; do
+        b="$(trim "$item")"
+        [ -z "$b" ] && continue
+        [ "$url" = "$b" ] && unset IFS && return 0
+    done
+    unset IFS
+    return 1
 }
 
 process_section() {
@@ -309,9 +253,7 @@ process_section() {
         return 0
     fi
 
-    priority_rules="$(uci -q get "podkop.$section.subscribe_priority_rules" || echo '')"
-    exact_priority_rules="$(uci -q get "podkop.$section.subscribe_priority_exact" || echo '')"
-    exclude_keywords="$(uci -q get "podkop.$section.subscribe_exclude_keywords" || echo '')"
+    blocked_urls="$(uci -q get "podkop.$section.subscribe_blocked_urls" || echo '')"
     max_items="$(uci -q get "podkop.$section.subscribe_max_configs" || echo '20')"
     case "$max_items" in
         ''|*[!0-9]*) max_items=20 ;;
@@ -335,20 +277,14 @@ process_section() {
 
     while IFS="$(printf '\t')" read -r url title; do
         [ -z "$url" ] && continue
-        # Apply include/exclude rules by human-readable title only.
-        # Matching against full URL may produce false positives on random query data.
-        text="$title"
-        if is_excluded "$text" "$exclude_keywords"; then
+        if is_blocked_url "$url" "$blocked_urls"; then
             excluded_count=$((excluded_count + 1))
             continue
         fi
         eligible_count=$((eligible_count + 1))
-        exact_score="$(exact_priority_score "$title" "$exact_priority_rules")"
-        keyword_score="$(priority_score "$text" "$priority_rules")"
-        score=$((exact_score + keyword_score))
         host="$(extract_host "$url")"
         lat="$(ping_latency "$host")"
-        printf '%s\t%s\t%s\t%s\n' "$score" "$lat" "$url" "$title" >> "$ranked_file"
+        printf '%s\t%s\t%s\n' "$lat" "$url" "$title" >> "$ranked_file"
     done < "$lines_file"
 
     if [ ! -s "$ranked_file" ]; then
@@ -360,9 +296,9 @@ process_section() {
         return 0
     fi
 
-    sort -t "$(printf '\t')" -k1,1nr -k2,2n "$ranked_file" -o "$ranked_file"
-    best_url="$(head -n1 "$ranked_file" | cut -f3)"
-    best_title="$(head -n1 "$ranked_file" | cut -f4)"
+    sort -t "$(printf '\t')" -k1,1n "$ranked_file" -o "$ranked_file"
+    best_url="$(head -n1 "$ranked_file" | cut -f2)"
+    best_title="$(head -n1 "$ranked_file" | cut -f3)"
 
     case "$mode" in
         url)
@@ -396,11 +332,12 @@ process_section() {
         "applied=$applied_count" "changed=$changed" "note=$note"
         status_file="$STATE_DIR/$section.status"
         rank_idx=0
-        while IFS="$(printf '\t')" read -r score lat url title; do
+        while IFS="$(printf '\t')" read -r lat url title; do
             rank_idx=$((rank_idx + 1))
-            [ "$rank_idx" -gt 5 ] && break
+            [ "$rank_idx" -gt 50 ] && break
             printf 'top%s_title=%s\n' "$rank_idx" "$(sanitize_status_value "$title")" >> "$status_file"
             printf 'top%s_ping=%s\n' "$rank_idx" "$lat" >> "$status_file"
+            printf 'top%s_url=%s\n' "$rank_idx" "$url" >> "$status_file"
         done < "$ranked_file"
     fi
 

@@ -87,6 +87,52 @@ function injectSubscribeStyles() {
       background: var(--success-color-low, #d4edda);
       border-color: var(--success-color-medium, #28a745);
     }
+    .podkop-subscribe-item.blocked {
+      opacity: 0.7;
+      border-style: dashed;
+    }
+    .podkop-subscribe-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .podkop-subscribe-item-main {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .podkop-subscribe-item-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .podkop-subscribe-ping {
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background: var(--background-color-low, #e5e5e5);
+      white-space: nowrap;
+    }
+    .podkop-subscribe-ping.bad {
+      background: #dc3545;
+      color: #fff;
+    }
+    .podkop-subscribe-btn {
+      border: 1px solid var(--background-color-low, #999);
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      background: var(--background-color-high, #fff);
+    }
+    .podkop-subscribe-btn.apply {
+      border-color: var(--primary-color-high, #2196f3);
+    }
+    .podkop-subscribe-btn.block {
+      border-color: #dc3545;
+      color: #dc3545;
+    }
     .podkop-subscribe-item-title {
       font-weight: bold;
       margin-bottom: 3px;
@@ -165,6 +211,8 @@ function injectSubscribeStyles() {
   `;
   document.head.appendChild(style);
 }
+
+var sectionPingCache = {};
 
 // Remove config lists when connection type or proxy_config_type changes
 function removeConfigLists() {
@@ -483,6 +531,43 @@ function getSubscribeUrl(ev, section_id, fieldName) {
   return "";
 }
 
+function getFieldInput(section_id, fieldName) {
+  return (
+    document.getElementById("widget.cbid.podkop." + section_id + "." + fieldName) ||
+    document.getElementById("cbid.podkop." + section_id + "." + fieldName) ||
+    document.querySelector('input[id*="podkop.' + section_id + "." + fieldName + '"]') ||
+    document.querySelector('textarea[id*="podkop.' + section_id + "." + fieldName + '"]')
+  );
+}
+
+function getBlockedUrls(section_id) {
+  var input = getFieldInput(section_id, "subscribe_blocked_urls");
+  if (!input || !input.value) return [];
+  return input.value.split(",").map(function(v) { return v.trim(); }).filter(Boolean);
+}
+
+function setBlockedUrls(section_id, urls) {
+  var input = getFieldInput(section_id, "subscribe_blocked_urls");
+  if (!input) return;
+  input.value = urls.join(",");
+  if (input.dispatchEvent) {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
+
+function updateSectionPingCache(section_id, result) {
+  if (!result) return;
+  var map = {};
+  for (var i = 1; i <= 50; i++) {
+    var url = result["top" + i + "_url"];
+    var ping = result["top" + i + "_ping"];
+    if (!url) break;
+    map[url] = ping;
+  }
+  sectionPingCache[section_id] = map;
+}
+
 function runImmediateAutoUpdate(section_id) {
   return new Promise(function (resolve, reject) {
     var xhr = new XMLHttpRequest();
@@ -544,6 +629,7 @@ function renderImmediateAutoUpdateLog(section_id, result, isError, ev) {
     lines.push("Status: error");
     lines.push("Details: " + (result && result.message ? result.message : "failed"));
   } else {
+    updateSectionPingCache(section_id, result);
     lines.push("Status: " + (result.status || "ok"));
     if (result.mode) lines.push("Mode: " + result.mode);
     if (result.total != null) lines.push("Found configs: " + result.total);
@@ -728,11 +814,19 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
     });
   }
 
+  var blockedLookup = {};
+  getBlockedUrls(section_id).forEach(function(url) {
+    blockedLookup[url] = true;
+  });
+
   // Function to render configs with current URL highlighting
   var renderConfigs = function(currentConfigUrl) {
     configs.forEach(function (config, index) {
     var configItem = document.createElement("div");
     configItem.className = "podkop-subscribe-item";
+    if (blockedLookup[config.url]) {
+      configItem.classList.add("blocked");
+    }
 
     // Check if this is an xhttp config
     var isXhttp = isXhttpConfig(config.url);
@@ -788,20 +882,76 @@ function createConfigListUI(configs, listId, isOutbound, section_id, isUrltest, 
       configTitle.appendChild(xhttpBadge);
     }
 
-    configItem.appendChild(configTitle);
+    var row = document.createElement("div");
+    row.className = "podkop-subscribe-row";
+    var mainCol = document.createElement("div");
+    mainCol.className = "podkop-subscribe-item-main";
+    mainCol.appendChild(configTitle);
+    row.appendChild(mainCol);
+
+    var actions = document.createElement("div");
+    actions.className = "podkop-subscribe-item-actions";
+
+    var pingLabel = document.createElement("span");
+    pingLabel.className = "podkop-subscribe-ping";
+    var pingMap = sectionPingCache[section_id] || {};
+    var pingValue = pingMap[config.url];
+    if (pingValue != null && pingValue !== "") {
+      pingLabel.textContent = String(pingValue) === "999999" ? "timeout" : (pingValue + " ms");
+      if (String(pingValue) === "999999") {
+        pingLabel.classList.add("bad");
+      }
+    } else {
+      pingLabel.textContent = "-";
+    }
+    actions.appendChild(pingLabel);
+
+    var applyBtn = document.createElement("button");
+    applyBtn.type = "button";
+    applyBtn.className = "podkop-subscribe-btn apply";
+    applyBtn.textContent = (isUrltest || isSelector) ? _("Выбрать") : _("Установить");
+    actions.appendChild(applyBtn);
+
+    var blockBtn = document.createElement("button");
+    blockBtn.type = "button";
+    blockBtn.className = "podkop-subscribe-btn block";
+    blockBtn.textContent = blockedLookup[config.url] ? _("Разблокировать") : _("Блокировать");
+    actions.appendChild(blockBtn);
+
+    row.appendChild(actions);
+    configItem.appendChild(row);
 
     // Store config data on element for urltest/selector
     configItem._configData = config;
 
+    var applyHandler;
     if (isOutbound) {
-      configItem.onclick = createOutboundClickHandlerEnhanced(config, configItem, configList, section_id);
+      applyHandler = createOutboundClickHandlerEnhanced(config, configItem, configList, section_id);
     } else if (isUrltest) {
-      configItem.onclick = createUrltestClickHandler(config, configItem, configList, section_id, isXhttp);
+      applyHandler = createUrltestClickHandler(config, configItem, configList, section_id, isXhttp);
     } else if (isSelector) {
-      configItem.onclick = createSelectorClickHandler(config, configItem, configList, section_id, isXhttp);
+      applyHandler = createSelectorClickHandler(config, configItem, configList, section_id, isXhttp);
     } else {
-      configItem.onclick = createUrlClickHandler(config, configItem, configList, section_id, isXhttp);
+      applyHandler = createUrlClickHandler(config, configItem, configList, section_id, isXhttp);
     }
+    configItem.onclick = applyHandler;
+    applyBtn.onclick = function(e) {
+      e.stopPropagation();
+      applyHandler(e);
+    };
+    blockBtn.onclick = function(e) {
+      e.stopPropagation();
+      if (blockedLookup[config.url]) {
+        delete blockedLookup[config.url];
+        configItem.classList.remove("blocked");
+        blockBtn.textContent = _("Блокировать");
+      } else {
+        blockedLookup[config.url] = true;
+        configItem.classList.add("blocked");
+        blockBtn.textContent = _("Разблокировать");
+      }
+      setBlockedUrls(section_id, Object.keys(blockedLookup));
+    };
 
       configList.appendChild(configItem);
     });
@@ -1491,32 +1641,11 @@ function enhanceSectionWithSubscribe(section) {
 
   o = section.option(
     form.Value,
-    "subscribe_priority_rules",
-    _("Priority Rules"),
-    _("Comma-separated rules: keyword=score (example: us=200,uk=100,slow=-300)")
+    "subscribe_blocked_urls",
+    _("Blocked Config URLs"),
+    _("Managed by buttons in config list; do not edit manually")
   );
   o.depends("subscribe_auto_update", "1");
-  o.placeholder = "us=200,uk=150,ru=-200";
-  o.rmempty = true;
-
-  o = section.option(
-    form.Value,
-    "subscribe_priority_exact",
-    _("Exact Priority"),
-    _("Exact title rules: title=score;title2=score2 (applied before ping)")
-  );
-  o.depends("subscribe_auto_update", "1");
-  o.placeholder = "United Kingdom ( AI 🤖 )=300;Finland=100";
-  o.rmempty = true;
-
-  o = section.option(
-    form.Value,
-    "subscribe_exclude_keywords",
-    _("Exclude Keywords"),
-    _("Comma-separated keywords; matching configs are ignored")
-  );
-  o.depends("subscribe_auto_update", "1");
-  o.placeholder = "test,free,trial";
   o.rmempty = true;
 
   o = section.option(
@@ -1571,8 +1700,8 @@ function enhanceSectionWithSubscribe(section) {
         }
       }
 
-      autoLoadCachedConfigs(section_id, effectiveMode);
       renderImmediateAutoUpdateLog(section_id, finalResult, false, ev);
+      autoLoadCachedConfigs(section_id, effectiveMode);
       ui.addNotification(null, E("p", {}, _("Auto-update completed.")), "info");
     }).catch(function (err) {
       renderImmediateAutoUpdateLog(section_id, { message: err.message }, true, ev);
@@ -1789,4 +1918,3 @@ var EntryPoint = {
 };
 
 return baseclass.extend(EntryPoint);
-
