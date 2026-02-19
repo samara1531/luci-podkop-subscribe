@@ -309,7 +309,9 @@ process_section() {
 
     while IFS="$(printf '\t')" read -r url title; do
         [ -z "$url" ] && continue
-        text="$title $url"
+        # Apply include/exclude rules by human-readable title only.
+        # Matching against full URL may produce false positives on random query data.
+        text="$title"
         if is_excluded "$text" "$exclude_keywords"; then
             excluded_count=$((excluded_count + 1))
             continue
