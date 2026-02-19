@@ -34,7 +34,13 @@ function getThemeFallbackPalette() {
       border: "rgba(255, 255, 255, 0.16)",
       surface: "rgba(255, 255, 255, 0.06)",
       surfaceAlt: "rgba(255, 255, 255, 0.04)",
-      muted: "rgba(255, 255, 255, 0.12)"
+      muted: "rgba(255, 255, 255, 0.12)",
+      hover: "rgba(255, 255, 255, 0.14)",
+      hoverBorder: "rgba(255, 255, 255, 0.30)",
+      selected: "rgba(46, 160, 67, 0.22)",
+      selectedBorder: "rgba(46, 160, 67, 0.55)",
+      errorSurface: "rgba(220, 53, 69, 0.20)",
+      errorBorder: "rgba(220, 53, 69, 0.50)"
     };
   }
 
@@ -42,7 +48,13 @@ function getThemeFallbackPalette() {
     border: "rgba(0, 0, 0, 0.16)",
     surface: "rgba(0, 0, 0, 0.03)",
     surfaceAlt: "rgba(0, 0, 0, 0.02)",
-    muted: "rgba(0, 0, 0, 0.09)"
+    muted: "rgba(0, 0, 0, 0.09)",
+    hover: "rgba(33, 120, 212, 0.10)",
+    hoverBorder: "rgba(33, 120, 212, 0.45)",
+    selected: "rgba(40, 167, 69, 0.14)",
+    selectedBorder: "rgba(40, 167, 69, 0.45)",
+    errorSurface: "rgba(220, 53, 69, 0.10)",
+    errorBorder: "rgba(220, 53, 69, 0.42)"
   };
 }
 
@@ -135,6 +147,9 @@ function injectSubscribeStyles() {
       border: 1px solid var(--background-color-low, ${themeFallbacks.border});
       border-radius: 4px;
       background: var(--background-color-high, ${themeFallbacks.surfaceAlt});
+      width: 100%;
+      max-width: 980px;
+      box-sizing: border-box;
     }
     .podkop-subscribe-item {
       margin: 8px 0;
@@ -146,12 +161,12 @@ function injectSubscribeStyles() {
       background: var(--background-color-high, ${themeFallbacks.surface});
     }
     .podkop-subscribe-item:hover {
-      background: var(--primary-color-low, #e8f4f8);
-      border-color: var(--primary-color-high, #0078d4);
+      background: var(--primary-color-low, ${themeFallbacks.hover});
+      border-color: var(--primary-color-high, ${themeFallbacks.hoverBorder});
     }
     .podkop-subscribe-item.selected {
-      background: var(--success-color-low, #d4edda);
-      border-color: var(--success-color-medium, #28a745);
+      background: var(--success-color-low, ${themeFallbacks.selected});
+      border-color: var(--success-color-medium, ${themeFallbacks.selectedBorder});
     }
     .podkop-subscribe-item.blocked {
       opacity: 0.7;
@@ -227,10 +242,12 @@ function injectSubscribeStyles() {
     .podkop-subscribe-field {
       display: inline-block;
       width: calc(100% - 220px);
+      max-width: 980px;
+      box-sizing: border-box;
     }
     .podkop-subscribe-item.urltest-selected {
-      background: var(--primary-color-low, #e3f2fd);
-      border-color: var(--primary-color-high, #2196f3);
+      background: var(--primary-color-low, ${themeFallbacks.hover});
+      border-color: var(--primary-color-high, ${themeFallbacks.hoverBorder});
       position: relative;
     }
     .podkop-subscribe-item.urltest-selected::after {
@@ -246,12 +263,12 @@ function injectSubscribeStyles() {
     .podkop-subscribe-item.xhttp-disabled {
       opacity: 0.5;
       cursor: not-allowed;
-      background: var(--error-color-low, #ffebee);
-      border-color: var(--error-color-medium, #f44336);
+      background: var(--error-color-low, ${themeFallbacks.errorSurface});
+      border-color: var(--error-color-medium, ${themeFallbacks.errorBorder});
     }
     .podkop-subscribe-item.xhttp-disabled:hover {
-      background: var(--error-color-low, #ffebee);
-      border-color: var(--error-color-medium, #f44336);
+      background: var(--error-color-low, ${themeFallbacks.errorSurface});
+      border-color: var(--error-color-medium, ${themeFallbacks.errorBorder});
     }
     .podkop-subscribe-xhttp-badge {
       display: inline-block;
@@ -284,6 +301,21 @@ function injectSubscribeStyles() {
       font-size: 12px;
       color: var(--text-color-high, inherit);
       vertical-align: middle;
+    }
+    @media (max-width: 980px) {
+      .podkop-subscribe-label {
+        width: 100%;
+        display: block;
+        padding-right: 0;
+        margin-bottom: 6px;
+      }
+      .podkop-subscribe-field {
+        width: 100%;
+        max-width: 100%;
+      }
+      .podkop-subscribe-list {
+        max-width: 100%;
+      }
     }
   `;
   document.head.appendChild(style);

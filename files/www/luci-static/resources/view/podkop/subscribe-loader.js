@@ -432,13 +432,21 @@
       return {
         border: "rgba(255, 255, 255, 0.16)",
         surface: "rgba(255, 255, 255, 0.06)",
-        surfaceAlt: "rgba(255, 255, 255, 0.04)"
+        surfaceAlt: "rgba(255, 255, 255, 0.04)",
+        hover: "rgba(255, 255, 255, 0.14)",
+        hoverBorder: "rgba(255, 255, 255, 0.30)",
+        selected: "rgba(46, 160, 67, 0.22)",
+        selectedBorder: "rgba(46, 160, 67, 0.55)"
       };
     }
     return {
       border: "rgba(0, 0, 0, 0.16)",
       surface: "rgba(0, 0, 0, 0.03)",
-      surfaceAlt: "rgba(0, 0, 0, 0.02)"
+      surfaceAlt: "rgba(0, 0, 0, 0.02)",
+      hover: "rgba(33, 120, 212, 0.10)",
+      hoverBorder: "rgba(33, 120, 212, 0.45)",
+      selected: "rgba(40, 167, 69, 0.14)",
+      selectedBorder: "rgba(40, 167, 69, 0.45)"
     };
   }
 
@@ -485,6 +493,9 @@
       "  border: 1px solid var(--background-color-low, " + themeFallbacks.border + ");",
       "  border-radius: 4px;",
       "  background: var(--background-color-high, " + themeFallbacks.surfaceAlt + ");",
+      "  width: 100%;",
+      "  max-width: 980px;",
+      "  box-sizing: border-box;",
       "}",
       ".podkop-subscribe-item {",
       "  margin: 8px 0;",
@@ -496,12 +507,12 @@
       "  background: var(--background-color-high, " + themeFallbacks.surface + ");",
       "}",
       ".podkop-subscribe-item:hover {",
-      "  background: var(--primary-color-low, #e8f4f8);",
-      "  border-color: var(--primary-color-high, #0078d4);",
+      "  background: var(--primary-color-low, " + themeFallbacks.hover + ");",
+      "  border-color: var(--primary-color-high, " + themeFallbacks.hoverBorder + ");",
       "}",
       ".podkop-subscribe-item.selected {",
-      "  background: var(--success-color-low, #d4edda);",
-      "  border-color: var(--success-color-medium, #28a745);",
+      "  background: var(--success-color-low, " + themeFallbacks.selected + ");",
+      "  border-color: var(--success-color-medium, " + themeFallbacks.selectedBorder + ");",
       "}",
       ".podkop-subscribe-item-title {",
       "  font-weight: bold;",
