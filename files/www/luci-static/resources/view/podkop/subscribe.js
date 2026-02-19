@@ -322,6 +322,7 @@ function injectSubscribeStyles() {
 }
 
 var sectionPingCache = {};
+var sectionBlockedUrlsCache = {};
 
 function normalizePingTitle(title) {
   return String(title || "")
@@ -905,6 +906,18 @@ function refreshConfigListFromSources(section_id, mode, ev) {
 
 var BLOCKED_URL_ENC_PREFIX = "enc:";
 
+function normalizeBlockedUrls(urls) {
+  var out = [];
+  var seen = {};
+  (Array.isArray(urls) ? urls : []).forEach(function(url) {
+    var clean = String(url || "").trim();
+    if (!clean || seen[clean]) return;
+    seen[clean] = true;
+    out.push(clean);
+  });
+  return out;
+}
+
 function decodeBlockedUrlItem(item) {
   var value = String(item || "").trim();
   if (!value) return "";
@@ -924,15 +937,23 @@ function encodeBlockedUrlItem(url) {
   return BLOCKED_URL_ENC_PREFIX + encodeURIComponent(value);
 }
 
-function readBlockedUrlsRaw(section_id) {
+function readBlockedUrlsRawInput(section_id) {
   var input = getFieldInput(section_id, "subscribe_blocked_urls");
   if (!input || !input.value) return "";
   return String(input.value || "").trim();
 }
 
+function serializeBlockedUrls(urls) {
+  return normalizeBlockedUrls(urls).map(function(url) {
+    return encodeBlockedUrlItem(url);
+  }).join(",");
+}
+
 function getBlockedUrls(section_id) {
-  var raw = readBlockedUrlsRaw(section_id);
-  if (!raw) return [];
+  var raw = readBlockedUrlsRawInput(section_id);
+  if (!raw) {
+    return normalizeBlockedUrls(sectionBlockedUrlsCache[section_id] || []);
+  }
   var out = [];
   var seen = {};
   raw.split(",").forEach(function(v) {
@@ -941,21 +962,17 @@ function getBlockedUrls(section_id) {
     seen[decoded] = true;
     out.push(decoded);
   });
+  out = normalizeBlockedUrls(out);
+  sectionBlockedUrlsCache[section_id] = out;
   return out;
 }
 
 function setBlockedUrls(section_id, urls) {
+  var normalized = normalizeBlockedUrls(urls);
+  sectionBlockedUrlsCache[section_id] = normalized;
   var input = getFieldInput(section_id, "subscribe_blocked_urls");
   if (!input) return;
-  var out = [];
-  var seen = {};
-  (Array.isArray(urls) ? urls : []).forEach(function(url) {
-    var clean = String(url || "").trim();
-    if (!clean || seen[clean]) return;
-    seen[clean] = true;
-    out.push(encodeBlockedUrlItem(clean));
-  });
-  input.value = out.join(",");
+  input.value = serializeBlockedUrls(normalized);
   if (input.dispatchEvent) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1011,9 +1028,10 @@ function runImmediateAutoUpdate(section_id) {
       reject(new Error("Сетевая ошибка"));
     };
 
+    var blockedUrls = getBlockedUrls(section_id);
     xhr.send(JSON.stringify({
       section_id: section_id,
-      blocked_urls: readBlockedUrlsRaw(section_id)
+      blocked_urls: serializeBlockedUrls(blockedUrls)
     }));
   });
 }
