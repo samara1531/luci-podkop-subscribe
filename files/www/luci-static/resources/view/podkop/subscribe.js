@@ -1546,8 +1546,22 @@ function enhanceSectionWithSubscribe(section) {
 
     runImmediateAutoUpdate(section_id).then(function (result) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
+      var finalResult = result || {};
+
+      if (mode === "outbound" && finalResult.best_url) {
+        try {
+          var outboundData = parseVlessConfigUrl(finalResult.best_url);
+          setOutboundTextareaValue(section_id, outboundData);
+          finalResult.changed = "1";
+          finalResult.applied = "1";
+          finalResult.note = "outbound_best_applied_to_json";
+        } catch (e) {
+          finalResult.note = "outbound_best_found_but_json_apply_failed";
+        }
+      }
+
       autoLoadCachedConfigs(section_id, mode);
-      renderImmediateAutoUpdateLog(section_id, result || {}, false, ev);
+      renderImmediateAutoUpdateLog(section_id, finalResult, false, ev);
       ui.addNotification(null, E("p", {}, _("Auto-update completed.")), "info");
     }).catch(function (err) {
       renderImmediateAutoUpdateLog(section_id, { message: err.message }, true, ev);

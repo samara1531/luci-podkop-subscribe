@@ -362,7 +362,8 @@ process_section() {
     if [ "$FORCE_MODE" -eq 1 ]; then
         write_status "$section" \
         "status=$status" "mode=$mode" "total=$total_count" "eligible=$eligible_count" "excluded=$excluded_count" \
-        "best_title=$(sanitize_status_value "$best_title")" "applied=$applied_count" "changed=$changed" "note=$note"
+        "best_title=$(sanitize_status_value "$best_title")" "best_url=$best_url" \
+        "applied=$applied_count" "changed=$changed" "note=$note"
         status_file="$STATE_DIR/$section.status"
         rank_idx=0
         while IFS="$(printf '\t')" read -r score lat url title; do

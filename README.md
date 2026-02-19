@@ -50,6 +50,7 @@ New per-section options in LuCI:
 - `Exclude Keywords` - comma-separated keywords to ignore.
 - `Max Configs` - cap for URLTest/Selector auto-filled lists.
 - `Update Now` button - runs refresh + latency test immediately (no wait for interval) and shows run log under the button.
+  - In `outbound` mode, `Update Now` also writes JSON for the best server to `Outbound Configuration`.
 
 How it works:
 
