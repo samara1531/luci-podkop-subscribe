@@ -1,116 +1,180 @@
 #!/bin/sh
-# Podkop Subscribe HTTP endpoint
+# Podkop Subscribe HTTP endpoint (single/multi subscriptions + manual links)
 
 . /usr/share/libubox/jshn.sh
 
-# Set content type
 echo "Content-Type: application/json"
 echo ""
 
-# Read POST data
-read -r url
+read -r POST_DATA
 
-if [ -z "$url" ]; then
+if [ -z "$POST_DATA" ]; then
     json_init
-    json_add_string "error" "URL is required"
+    json_add_string "error" "Request body is required"
     json_dump
     exit 1
 fi
 
-# Fetch and decode subscribe
-tmpfile="/tmp/podkop_subscribe_$$"
-decoded_file="/tmp/podkop_subscribe_decoded_$$"
+TMP_RAW="/tmp/podkop_subscribe_raw_$$"
+TMP_DEC="/tmp/podkop_subscribe_dec_$$"
+TMP_SOURCES="/tmp/podkop_subscribe_sources_$$"
+TMP_MANUAL="/tmp/podkop_subscribe_manual_$$"
+TMP_ENTRIES="/tmp/podkop_subscribe_entries_$$"
+TMP_DEDUP="/tmp/podkop_subscribe_dedup_$$"
 
-# Cleanup function
 cleanup() {
-    rm -f "$tmpfile" "$decoded_file"
+    rm -f "$TMP_RAW" "$TMP_DEC" "$TMP_SOURCES" "$TMP_MANUAL" "$TMP_ENTRIES" "$TMP_DEDUP"
 }
 trap cleanup EXIT
 
-# Fetch the subscribe URL
-# Use 'v2rayNG' User-Agent to get base64 encoded protocol links
-if ! wget -q -O "$tmpfile" --timeout=30 --user-agent="v2rayNG" "$url" 2>/dev/null; then
-    json_init
-    json_add_string "error" "Failed to fetch URL"
-    json_dump
-    exit 1
-fi
-
-# Check if file is empty
-if [ ! -s "$tmpfile" ]; then
-    json_init
-    json_add_string "error" "Empty response from server"
-    json_dump
-    exit 1
-fi
-
-# Decode base64
-if ! base64 -d "$tmpfile" > "$decoded_file" 2>/dev/null; then
-    json_init
-    json_add_string "error" "Failed to decode base64"
-    json_dump
-    exit 1
-fi
-
-# URL decode function using printf
-url_decode() {
-    printf '%b' "$(echo "$1" | sed 's/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')" 2>/dev/null || echo "$1"
+trim() {
+    # shellcheck disable=SC2001
+    printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
-# Parse all supported protocols
+url_decode() {
+    printf '%b' "$(printf '%s' "$1" | sed 's/+/ /g;s/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')" 2>/dev/null || printf '%s' "$1"
+}
+
+is_supported_url() {
+    case "$1" in
+        vless://*|ss://*|trojan://*|hy2://*|hysteria2://*|socks://*|socks4://*|socks5://*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+protocol_from_url() {
+    case "$1" in
+        vless://*) printf 'vless' ;;
+        ss://*) printf 'ss' ;;
+        trojan://*) printf 'trojan' ;;
+        hy2://*|hysteria2://*) printf 'hy2' ;;
+        socks://*|socks4://*|socks5://*) printf 'socks' ;;
+        *) printf '' ;;
+    esac
+}
+
+extract_title() {
+    line="$1"
+    fallback="$2"
+    title="$(printf '%s' "$line" | sed -n 's/.*#\(.*\)$/\1/p')"
+    [ -z "$title" ] && title="$fallback"
+    url_decode "$title"
+}
+
+append_entry() {
+    line="$1"
+    idx="$2"
+    if ! is_supported_url "$line"; then
+        return 1
+    fi
+    proto="$(protocol_from_url "$line")"
+    title="$(extract_title "$line" "Config $idx")"
+    printf '%s\t%s\t%s\n' "$line" "$title" "$proto" >> "$TMP_ENTRIES"
+    return 0
+}
+
+append_from_decoded_file() {
+    decoded_file="$1"
+    idx="$2"
+    while IFS= read -r line || [ -n "$line" ]; do
+        clean="$(trim "$(printf '%s' "$line" | tr -d '\r')")"
+        [ -z "$clean" ] && continue
+        if append_entry "$clean" "$idx"; then
+            idx=$((idx + 1))
+        fi
+    done < "$decoded_file"
+    printf '%s' "$idx"
+}
+
+append_from_subscription_url() {
+    sub_url="$1"
+    idx="$2"
+
+    if ! wget -q -O "$TMP_RAW" --timeout=30 --user-agent="v2rayNG" "$sub_url" 2>/dev/null; then
+        printf '%s' "$idx"
+        return 1
+    fi
+    if [ ! -s "$TMP_RAW" ]; then
+        printf '%s' "$idx"
+        return 1
+    fi
+    if ! base64 -d "$TMP_RAW" > "$TMP_DEC" 2>/dev/null; then
+        printf '%s' "$idx"
+        return 1
+    fi
+
+    idx="$(append_from_decoded_file "$TMP_DEC" "$idx")"
+    printf '%s' "$idx"
+    return 0
+}
+
+extract_json_array_items() {
+    key="$1"
+    out_file="$2"
+    : > "$out_file"
+    i=0
+    while :; do
+        item="$(printf '%s' "$POST_DATA" | jsonfilter -e "@.${key}[$i]" 2>/dev/null)"
+        [ -z "$item" ] && break
+        printf '%s\n' "$item" >> "$out_file"
+        i=$((i + 1))
+    done
+}
+
+: > "$TMP_SOURCES"
+: > "$TMP_MANUAL"
+: > "$TMP_ENTRIES"
+
+if printf '%s' "$POST_DATA" | grep -q '^[[:space:]]*{'; then
+    extract_json_array_items "subscribe_urls" "$TMP_SOURCES"
+    extract_json_array_items "manual_links" "$TMP_MANUAL"
+else
+    printf '%s\n' "$POST_DATA" > "$TMP_SOURCES"
+fi
+
+idx=1
+if [ -s "$TMP_SOURCES" ]; then
+    while IFS= read -r sub_url || [ -n "$sub_url" ]; do
+        clean_url="$(trim "$sub_url")"
+        [ -z "$clean_url" ] && continue
+        idx="$(append_from_subscription_url "$clean_url" "$idx")"
+    done < "$TMP_SOURCES"
+fi
+
+if [ -s "$TMP_MANUAL" ]; then
+    while IFS= read -r manual_url || [ -n "$manual_url" ]; do
+        clean_url="$(trim "$manual_url")"
+        [ -z "$clean_url" ] && continue
+        if append_entry "$clean_url" "$idx"; then
+            idx=$((idx + 1))
+        fi
+    done < "$TMP_MANUAL"
+fi
+
+if [ ! -s "$TMP_ENTRIES" ]; then
+    json_init
+    json_add_string "error" "No valid configs found from provided sources"
+    json_dump
+    exit 1
+fi
+
+awk -F '\t' '!seen[$1]++' "$TMP_ENTRIES" > "$TMP_DEDUP"
+mv "$TMP_DEDUP" "$TMP_ENTRIES"
+
 json_init
 json_add_array "configs"
 
-index=1
-while IFS= read -r line || [ -n "$line" ]; do
-    # Trim whitespace and carriage returns
-    line=$(echo "$line" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-    # Skip empty lines
-    [ -z "$line" ] && continue
-
-    # Determine protocol
-    protocol=""
-    case "$line" in
-        vless://*)
-            protocol="vless"
-            ;;
-        ss://*)
-            protocol="ss"
-            ;;
-        trojan://*)
-            protocol="trojan"
-            ;;
-        hy2://*)
-            protocol="hy2"
-            ;;
-        hysteria2://*)
-            protocol="hy2"
-            ;;
-    esac
-
-    if [ -n "$protocol" ]; then
-        # Extract title from URL fragment (#title)
-        title=$(echo "$line" | sed -n 's/.*#\(.*\)$/\1/p')
-
-        # URL decode title
-        if [ -n "$title" ]; then
-            title=$(url_decode "$title")
-        fi
-
-        if [ -z "$title" ]; then
-            title="Config $index"
-        fi
-
-        json_add_object
-        json_add_string "url" "$line"
-        json_add_string "title" "$title"
-        json_add_string "protocol" "$protocol"
-        json_close_object
-
-        index=$((index + 1))
-    fi
-done < "$decoded_file"
+while IFS="$(printf '\t')" read -r url title protocol; do
+    [ -z "$url" ] && continue
+    json_add_object
+    json_add_string "url" "$url"
+    json_add_string "title" "$title"
+    json_add_string "protocol" "$protocol"
+    json_close_object
+done < "$TMP_ENTRIES"
 
 json_close_array
 json_dump

@@ -2,7 +2,7 @@
 # Auto-update Podkop subscribe configs:
 # - refresh subscription
 # - ping hosts
-# - apply keyword-based priorities/exclusions
+# - merge multiple sources (subscriptions + manual links)
 # - set best config for URL mode and lists for URLTest/Selector
 
 set -e
@@ -38,6 +38,12 @@ to_lower() {
 trim() {
     # shellcheck disable=SC2001
     printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+uci_list_values() {
+    section="$1"
+    option="$2"
+    uci -q show podkop 2>/dev/null | sed -n "s/^podkop\\.${section}\\.${option}='\\(.*\\)'$/\\1/p"
 }
 
 url_decode() {
@@ -147,7 +153,6 @@ fetch_subscription_lines() {
     out_file="$2"
     raw_file="$TMP_ROOT/raw.$$"
     dec_file="$TMP_ROOT/dec.$$"
-    : > "$out_file"
 
     if ! wget -q -O "$raw_file" --timeout=30 --user-agent="v2rayNG" "$sub_url" 2>/dev/null; then
         rm -f "$raw_file" "$dec_file"
@@ -162,7 +167,7 @@ fetch_subscription_lines() {
         return 1
     fi
 
-    idx=1
+    idx=$(( $(wc -l < "$out_file" 2>/dev/null || echo 0) + 1 ))
     while IFS= read -r line || [ -n "$line" ]; do
         clean="$(printf '%s' "$line" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         [ -z "$clean" ] && continue
@@ -177,6 +182,32 @@ fetch_subscription_lines() {
 
     rm -f "$raw_file" "$dec_file"
     [ -s "$out_file" ]
+}
+
+append_manual_lines() {
+    section="$1"
+    out_file="$2"
+    idx=$(( $(wc -l < "$out_file" 2>/dev/null || echo 0) + 1 ))
+    manual_lines="$(uci_list_values "$section" "subscribe_manual_links" || true)"
+    [ -z "$manual_lines" ] && return 1
+
+    appended=0
+    while IFS= read -r line || [ -n "$line" ]; do
+        clean="$(printf '%s' "$line" | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+        [ -z "$clean" ] && continue
+        case "$clean" in
+            vless://*|ss://*|trojan://*|hy2://*|hysteria2://*|socks://*|socks4://*|socks5://*)
+                title="$(extract_title "$clean" "Manual $idx")"
+                printf '%s\t%s\n' "$clean" "$title" >> "$out_file"
+                idx=$((idx + 1))
+                appended=1
+                ;;
+        esac
+    done <<EOF
+$manual_lines
+EOF
+
+    [ "$appended" -eq 1 ]
 }
 
 apply_mode_url() {
@@ -256,14 +287,11 @@ process_section() {
     esac
 
     if [ "$mode" = "outbound" ]; then
-        sub_url="$(uci -q get "podkop.$section.subscribe_url_outbound" || echo '')"
+        primary_url="$(uci -q get "podkop.$section.subscribe_url_outbound" || echo '')"
+        extra_option="subscribe_urls_extra_outbound"
     else
-        sub_url="$(uci -q get "podkop.$section.subscribe_url" || echo '')"
-    fi
-    if [ -z "$sub_url" ]; then
-        mark_run_now "$section"
-        [ "$FORCE_MODE" -eq 1 ] && write_status "$section" "status=skipped" "reason=empty_subscribe_url" "mode=$mode"
-        return 0
+        primary_url="$(uci -q get "podkop.$section.subscribe_url" || echo '')"
+        extra_option="subscribe_urls_extra"
     fi
 
     blocked_urls="$(uci -q get "podkop.$section.subscribe_blocked_urls" || echo '')"
@@ -276,15 +304,55 @@ process_section() {
 
     lines_file="$TMP_ROOT/lines.$section.$$"
     ranked_file="$TMP_ROOT/ranked.$section.$$"
+    source_urls_file="$TMP_ROOT/source_urls.$section.$$"
+    dedup_file="$TMP_ROOT/dedup.$section.$$"
     : > "$lines_file"
     : > "$ranked_file"
+    : > "$source_urls_file"
 
-    if ! fetch_subscription_lines "$sub_url" "$lines_file"; then
-        rm -f "$lines_file" "$ranked_file"
+    [ -n "$primary_url" ] && printf '%s\n' "$primary_url" >> "$source_urls_file"
+    uci_list_values "$section" "$extra_option" >> "$source_urls_file" 2>/dev/null || true
+    manual_sources="$(uci_list_values "$section" "subscribe_manual_links" || true)"
+
+    if [ ! -s "$source_urls_file" ] && [ -z "$manual_sources" ]; then
+        rm -f "$lines_file" "$ranked_file" "$source_urls_file" "$dedup_file"
+        mark_run_now "$section"
+        [ "$FORCE_MODE" -eq 1 ] && write_status "$section" "status=skipped" "reason=empty_sources" "mode=$mode"
+        return 0
+    fi
+
+    fetched_any=0
+    if [ -s "$source_urls_file" ]; then
+        while IFS= read -r sub_url || [ -n "$sub_url" ]; do
+            clean_sub_url="$(trim "$sub_url")"
+            [ -z "$clean_sub_url" ] && continue
+            if fetch_subscription_lines "$clean_sub_url" "$lines_file"; then
+                fetched_any=1
+            fi
+        done < "$source_urls_file"
+    fi
+
+    manual_any=0
+    if append_manual_lines "$section" "$lines_file"; then
+        manual_any=1
+    fi
+
+    if [ "$fetched_any" -ne 1 ] && [ "$manual_any" -ne 1 ]; then
+        rm -f "$lines_file" "$ranked_file" "$source_urls_file" "$dedup_file"
         mark_run_now "$section"
         [ "$FORCE_MODE" -eq 1 ] && write_status "$section" "status=error" "reason=fetch_or_decode_failed" "mode=$mode"
         return 0
     fi
+
+    if [ ! -s "$lines_file" ]; then
+        rm -f "$lines_file" "$ranked_file" "$source_urls_file" "$dedup_file"
+        mark_run_now "$section"
+        [ "$FORCE_MODE" -eq 1 ] && write_status "$section" "status=error" "reason=no_valid_configs" "mode=$mode"
+        return 0
+    fi
+
+    awk -F "$(printf '\t')" '!seen[$1]++' "$lines_file" > "$dedup_file"
+    mv "$dedup_file" "$lines_file"
 
     total_count="$(wc -l < "$lines_file" 2>/dev/null || echo 0)"
 
@@ -301,7 +369,7 @@ process_section() {
     done < "$lines_file"
 
     if [ ! -s "$ranked_file" ]; then
-        rm -f "$lines_file" "$ranked_file"
+        rm -f "$lines_file" "$ranked_file" "$source_urls_file" "$dedup_file"
         mark_run_now "$section"
         [ "$FORCE_MODE" -eq 1 ] && write_status "$section" \
             "status=ok" "mode=$mode" "total=$total_count" "eligible=0" "excluded=$excluded_count" \
@@ -361,7 +429,7 @@ process_section() {
         done < "$ranked_file"
     fi
 
-    rm -f "$lines_file" "$ranked_file"
+    rm -f "$lines_file" "$ranked_file" "$source_urls_file" "$dedup_file"
     mark_run_now "$section"
 }
 

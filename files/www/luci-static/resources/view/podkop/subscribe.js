@@ -327,8 +327,8 @@ function refetchConfigsForSection(select) {
 
   var newType = select.value;
 
-  // Only refetch for url/urltest/selector modes
-  if (newType !== "url" && newType !== "urltest" && newType !== "selector") {
+  // Only refetch for modes that use subscribe-based lists
+  if (newType !== "url" && newType !== "urltest" && newType !== "selector" && newType !== "outbound") {
     removeConfigLists();
     return;
   }
@@ -619,6 +619,58 @@ function getFieldInput(section_id, fieldName) {
     document.querySelector('input[id*="podkop.' + section_id + "." + fieldName + '"]') ||
     document.querySelector('textarea[id*="podkop.' + section_id + "." + fieldName + '"]')
   );
+}
+
+function getDynamicListValues(section_id, fieldName) {
+  var baseId = "cbid.podkop." + section_id + "." + fieldName;
+  var values = [];
+  var seen = {};
+  var hiddenInputs = document.querySelectorAll('input[type="hidden"][name="' + baseId + '"]');
+  hiddenInputs.forEach(function(input) {
+    var value = (input.value || "").trim();
+    if (!value || seen[value]) return;
+    seen[value] = true;
+    values.push(value);
+  });
+  return values;
+}
+
+function buildSubscribeSources(section_id, isOutbound) {
+  var primaryField = isOutbound ? "subscribe_url_outbound" : "subscribe_url";
+  var extraField = isOutbound ? "subscribe_urls_extra_outbound" : "subscribe_urls_extra";
+  var primaryInput = getFieldInput(section_id, primaryField);
+  var primaryUrl = primaryInput && primaryInput.value ? primaryInput.value.trim() : "";
+  var sourceUrls = [];
+  var seenUrls = {};
+  var manualLinks = [];
+  var seenManual = {};
+
+  function pushUnique(target, seen, value) {
+    var v = (value || "").trim();
+    if (!v || seen[v]) return;
+    seen[v] = true;
+    target.push(v);
+  }
+
+  pushUnique(sourceUrls, seenUrls, primaryUrl);
+  getDynamicListValues(section_id, extraField).forEach(function(v) {
+    pushUnique(sourceUrls, seenUrls, v);
+  });
+  getDynamicListValues(section_id, "subscribe_manual_links").forEach(function(v) {
+    pushUnique(manualLinks, seenManual, v);
+  });
+
+  return {
+    subscribe_urls: sourceUrls,
+    manual_links: manualLinks
+  };
+}
+
+function hasAnySubscribeSources(sources) {
+  if (!sources) return false;
+  var urls = sources.subscribe_urls || [];
+  var manual = sources.manual_links || [];
+  return urls.length > 0 || manual.length > 0;
 }
 
 function getBlockedUrls(section_id) {
@@ -1492,7 +1544,7 @@ function createOutboundClickHandlerEnhanced(config, configItem, configList, sect
 }
 
 // Fetch configs handler
-function fetchConfigs(subscribeUrl, subscribeContainer, listId, isOutbound, section_id, isUrltest, isSelector) {
+function fetchConfigs(sources, subscribeContainer, listId, isOutbound, section_id, isUrltest, isSelector) {
   // Remove old list for this section
   var existingList = document.getElementById(listId);
   if (existingList && existingList.parentNode) {
@@ -1524,7 +1576,7 @@ function fetchConfigs(subscribeUrl, subscribeContainer, listId, isOutbound, sect
 
   var xhr = new XMLHttpRequest();
   xhr.open("POST", "/cgi-bin/podkop-subscribe", true);
-  xhr.setRequestHeader("Content-Type", "text/plain");
+  xhr.setRequestHeader("Content-Type", "application/json");
 
   xhr.onreadystatechange = function () {
     if (xhr.readyState === 4) {
@@ -1601,7 +1653,7 @@ function fetchConfigs(subscribeUrl, subscribeContainer, listId, isOutbound, sect
     );
   };
 
-  xhr.send(subscribeUrl);
+  xhr.send(JSON.stringify(sources || {}));
 }
 
 // Show temporary error
@@ -1804,6 +1856,50 @@ function enhanceSectionWithSubscribe(section) {
     return validation.message;
   };
 
+  o = section.option(
+    form.DynamicList,
+    "subscribe_urls_extra",
+    _("Extra Subscribe URLs"),
+    _("Click + to add multiple subscription URLs")
+  );
+  o.depends("proxy_config_type", "url");
+  o.depends("proxy_config_type", "urltest");
+  o.depends("proxy_config_type", "selector");
+  o.placeholder = "https://example.com/subscribe2";
+  o.rmempty = true;
+  o.validate = function (section_id, value) {
+    if (!value || value.length === 0) {
+      return true;
+    }
+    var validation = main.validateUrl(value);
+    if (validation.valid) {
+      return true;
+    }
+    return validation.message;
+  };
+
+  o = section.option(
+    form.DynamicList,
+    "subscribe_manual_links",
+    _("Manual Config Links"),
+    _("Add direct proxy links (vless://, ss://, trojan://, hy2://, socks://)")
+  );
+  o.depends("proxy_config_type", "url");
+  o.depends("proxy_config_type", "urltest");
+  o.depends("proxy_config_type", "selector");
+  o.depends("proxy_config_type", "outbound");
+  o.placeholder = "vless://...";
+  o.rmempty = true;
+  o.validate = function (section_id, value) {
+    if (!value || value.length === 0) {
+      return true;
+    }
+    if (/^(vless|ss|trojan|hy2|hysteria2|socks|socks4|socks5):\/\//i.test(value)) {
+      return true;
+    }
+    return _("Only direct proxy links are allowed (vless://, ss://, trojan://, hy2://, socks://)");
+  };
+
   // Auto update settings for subscribe-driven modes
   o = section.option(
     form.Flag,
@@ -1954,10 +2050,10 @@ function enhanceSectionWithSubscribe(section) {
     if (ev && ev.preventDefault) ev.preventDefault();
     if (ev && ev.stopPropagation) ev.stopPropagation();
 
-    var subscribeUrl = getSubscribeUrl(ev, section_id, "subscribe_url");
+    var sources = buildSubscribeSources(section_id, false);
 
-    if (!subscribeUrl || subscribeUrl.length === 0) {
-      ui.addNotification(null, E("p", {}, _("Пожалуйста, введите Subscribe URL")));
+    if (!hasAnySubscribeSources(sources)) {
+      ui.addNotification(null, E("p", {}, _("Add at least one Subscribe URL or manual config link")));
       return false;
     }
 
@@ -1971,7 +2067,7 @@ function enhanceSectionWithSubscribe(section) {
     }
 
     fetchConfigs(
-      subscribeUrl,
+      sources,
       subscribeContainer,
       "podkop-subscribe-config-list-" + section_id,
       false,
@@ -1998,10 +2094,10 @@ function enhanceSectionWithSubscribe(section) {
     if (ev && ev.preventDefault) ev.preventDefault();
     if (ev && ev.stopPropagation) ev.stopPropagation();
 
-    var subscribeUrl = getSubscribeUrl(ev, section_id, "subscribe_url");
+    var sources = buildSubscribeSources(section_id, false);
 
-    if (!subscribeUrl || subscribeUrl.length === 0) {
-      ui.addNotification(null, E("p", {}, _("Пожалуйста, введите Subscribe URL")));
+    if (!hasAnySubscribeSources(sources)) {
+      ui.addNotification(null, E("p", {}, _("Add at least one Subscribe URL or manual config link")));
       return false;
     }
 
@@ -2015,7 +2111,7 @@ function enhanceSectionWithSubscribe(section) {
     }
 
     fetchConfigs(
-      subscribeUrl,
+      sources,
       subscribeContainer,
       "podkop-subscribe-config-list-urltest-" + section_id,
       false,
@@ -2042,10 +2138,10 @@ function enhanceSectionWithSubscribe(section) {
     if (ev && ev.preventDefault) ev.preventDefault();
     if (ev && ev.stopPropagation) ev.stopPropagation();
 
-    var subscribeUrl = getSubscribeUrl(ev, section_id, "subscribe_url");
+    var sources = buildSubscribeSources(section_id, false);
 
-    if (!subscribeUrl || subscribeUrl.length === 0) {
-      ui.addNotification(null, E("p", {}, _("Пожалуйста, введите Subscribe URL")));
+    if (!hasAnySubscribeSources(sources)) {
+      ui.addNotification(null, E("p", {}, _("Add at least one Subscribe URL or manual config link")));
       return false;
     }
 
@@ -2059,7 +2155,7 @@ function enhanceSectionWithSubscribe(section) {
     }
 
     fetchConfigs(
-      subscribeUrl,
+      sources,
       subscribeContainer,
       "podkop-subscribe-config-list-selector-" + section_id,
       false,
@@ -2093,6 +2189,26 @@ function enhanceSectionWithSubscribe(section) {
     return validation.message;
   };
 
+  o = section.option(
+    form.DynamicList,
+    "subscribe_urls_extra_outbound",
+    _("Extra Subscribe URLs"),
+    _("Click + to add multiple subscription URLs for outbound mode")
+  );
+  o.depends("proxy_config_type", "outbound");
+  o.placeholder = "https://example.com/subscribe2";
+  o.rmempty = true;
+  o.validate = function (section_id, value) {
+    if (!value || value.length === 0) {
+      return true;
+    }
+    var validation = main.validateUrl(value);
+    if (validation.valid) {
+      return true;
+    }
+    return validation.message;
+  };
+
   // Fetch button for Outbound mode
   o = section.option(
     form.Button,
@@ -2108,12 +2224,12 @@ function enhanceSectionWithSubscribe(section) {
     if (ev && ev.preventDefault) ev.preventDefault();
     if (ev && ev.stopPropagation) ev.stopPropagation();
 
-    var subscribeUrl = getSubscribeUrl(ev, section_id, "subscribe_url_outbound");
+    var sources = buildSubscribeSources(section_id, true);
 
-    if (!subscribeUrl || subscribeUrl.length === 0) {
+    if (!hasAnySubscribeSources(sources)) {
       ui.addNotification(
         null,
-        E("p", {}, _("Пожалуйста, введите Subscribe URL"))
+        E("p", {}, _("Add at least one Subscribe URL or manual config link"))
       );
       return false;
     }
@@ -2128,7 +2244,7 @@ function enhanceSectionWithSubscribe(section) {
     }
 
     fetchConfigs(
-      subscribeUrl,
+      sources,
       subscribeContainer,
       "podkop-subscribe-config-list-outbound-" + section_id,
       true,
