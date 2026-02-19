@@ -673,6 +673,42 @@ function hasAnySubscribeSources(sources) {
   return urls.length > 0 || manual.length > 0;
 }
 
+function refreshConfigListFromSources(section_id, mode, ev) {
+  var isOutbound = mode === "outbound";
+  var isUrltest = mode === "urltest";
+  var isSelector = mode === "selector";
+  var sources = buildSubscribeSources(section_id, isOutbound);
+  if (!hasAnySubscribeSources(sources)) {
+    return;
+  }
+
+  var fieldName = isOutbound ? "subscribe_url_outbound" : "subscribe_url";
+  var subscribeInput = findSubscribeInput(ev, section_id, fieldName) || getFieldInput(section_id, fieldName);
+  var subscribeContainer = null;
+  if (subscribeInput) {
+    subscribeContainer =
+      subscribeInput.closest(".cbi-value") ||
+      subscribeInput.closest(".cbi-section") ||
+      subscribeInput.parentElement;
+  }
+
+  var listId = isOutbound
+    ? "podkop-subscribe-config-list-outbound-" + section_id
+    : (isUrltest ? "podkop-subscribe-config-list-urltest-" + section_id
+      : (isSelector ? "podkop-subscribe-config-list-selector-" + section_id
+        : "podkop-subscribe-config-list-" + section_id));
+
+  fetchConfigs(
+    sources,
+    subscribeContainer,
+    listId,
+    isOutbound,
+    section_id,
+    isUrltest,
+    isSelector
+  );
+}
+
 function getBlockedUrls(section_id) {
   var input = getFieldInput(section_id, "subscribe_blocked_urls");
   if (!input || !input.value) return [];
@@ -2026,7 +2062,7 @@ function enhanceSectionWithSubscribe(section) {
       var finalResult = result || {};
       var effectiveMode = finalResult.mode || mode;
       updateSectionPingCache(section_id, finalResult);
-      autoLoadCachedConfigs(section_id, effectiveMode);
+      refreshConfigListFromSources(section_id, effectiveMode, ev);
       ui.addNotification(null, E("p", {}, _("Ping test completed.")), "info");
     }).catch(function (err) {
       ui.addNotification(null, E("p", {}, _("Ping test failed: ") + err.message), "warning");
