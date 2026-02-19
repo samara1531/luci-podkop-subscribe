@@ -600,6 +600,38 @@ function runImmediateAutoUpdate(section_id) {
   });
 }
 
+function runImmediatePingTest(section_id) {
+  return new Promise(function (resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/cgi-bin/podkop-subscribe-ping", true);
+    xhr.setRequestHeader("Content-Type", "text/plain");
+
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) return;
+      if (xhr.status !== 200) {
+        reject(new Error("HTTP " + xhr.status));
+        return;
+      }
+      try {
+        var result = JSON.parse(xhr.responseText);
+        if (result && !result.error) {
+          resolve(result);
+        } else {
+          reject(new Error(result && result.error ? result.error : "Unknown error"));
+        }
+      } catch (e) {
+        reject(new Error("Invalid JSON response"));
+      }
+    };
+
+    xhr.onerror = function () {
+      reject(new Error("Network error"));
+    };
+
+    xhr.send(section_id);
+  });
+}
+
 function renderImmediateAutoUpdateLog(section_id, result, isError, ev) {
   var logId = "podkop-subscribe-runlog-" + section_id;
   var logEl = document.getElementById(logId);
@@ -1706,6 +1738,40 @@ function enhanceSectionWithSubscribe(section) {
     }).catch(function (err) {
       renderImmediateAutoUpdateLog(section_id, { message: err.message }, true, ev);
       ui.addNotification(null, E("p", {}, _("Auto-update failed: ") + err.message), "warning");
+    });
+
+    return false;
+  };
+
+  o = section.option(
+    form.Button,
+    "subscribe_ping_now",
+    _("Ping Test"),
+    _("Test latency for all subscription configs without applying the best server")
+  );
+  o.depends("proxy_config_type", "url");
+  o.depends("proxy_config_type", "urltest");
+  o.depends("proxy_config_type", "selector");
+  o.depends("proxy_config_type", "outbound");
+  o.inputtitle = _("Ping Test");
+  o.inputstyle = "action";
+  o.onclick = function (ev, section_id) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+
+    ui.addNotification(null, E("p", {}, _("Running ping test...")), "info");
+
+    runImmediatePingTest(section_id).then(function (result) {
+      var mode = getCurrentProxyConfigType(section_id) || "url";
+      var finalResult = result || {};
+      var effectiveMode = finalResult.mode || mode;
+
+      renderImmediateAutoUpdateLog(section_id, finalResult, false, ev);
+      autoLoadCachedConfigs(section_id, effectiveMode);
+      ui.addNotification(null, E("p", {}, _("Ping test completed.")), "info");
+    }).catch(function (err) {
+      renderImmediateAutoUpdateLog(section_id, { message: err.message }, true, ev);
+      ui.addNotification(null, E("p", {}, _("Ping test failed: ") + err.message), "warning");
     });
 
     return false;
