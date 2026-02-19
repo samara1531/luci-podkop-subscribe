@@ -296,6 +296,7 @@ process_section() {
 
     blocked_urls="$(uci -q get "podkop.$section.subscribe_blocked_urls" || echo '')"
     max_items="$(uci -q get "podkop.$section.subscribe_max_configs" || echo '20')"
+    ping_all="$(uci -q get "podkop.$section.subscribe_ping_all" || echo '0')"
     case "$max_items" in
         ''|*[!0-9]*) max_items=20 ;;
     esac
@@ -359,11 +360,14 @@ process_section() {
     total_count="$(wc -l < "$lines_file" 2>/dev/null || echo 0)"
 
     # Limit ping/ranking workload to Max Configs to avoid CGI timeouts on huge lists.
-    if [ "$total_count" -gt "$max_items" ]; then
+    if [ "$ping_all" = "1" ]; then
+        cp "$lines_file" "$candidates_file"
+    elif [ "$total_count" -gt "$max_items" ]; then
         head -n "$max_items" "$lines_file" > "$candidates_file"
     else
         cp "$lines_file" "$candidates_file"
     fi
+    tested_count="$(wc -l < "$candidates_file" 2>/dev/null || echo 0)"
 
     while IFS="$(printf '\t')" read -r url title; do
         [ -z "$url" ] && continue
@@ -382,7 +386,7 @@ process_section() {
         mark_run_now "$section"
         [ "$FORCE_MODE" -eq 1 ] && write_status "$section" \
             "status=ok" "mode=$mode" "total=$total_count" "eligible=0" "excluded=$excluded_count" \
-            "applied=0" "changed=0" "note=no_eligible_configs_after_filters"
+            "tested=$tested_count" "applied=0" "changed=0" "note=no_eligible_configs_after_filters"
         return 0
     fi
 
@@ -424,6 +428,7 @@ process_section() {
     if [ "$FORCE_MODE" -eq 1 ]; then
         write_status "$section" \
         "status=$status" "mode=$mode" "total=$total_count" "eligible=$eligible_count" "excluded=$excluded_count" \
+        "tested=$tested_count" \
         "best_title=$(sanitize_status_value "$best_title")" "best_url=$best_url" \
         "applied=$applied_count" "changed=$changed" "note=$note"
         status_file="$STATE_DIR/$section.status"

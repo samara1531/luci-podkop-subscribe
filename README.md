@@ -43,6 +43,8 @@ sh /tmp/podkop-subscribe-uninstall.sh
   - `Block/Unblock`
 - Ping workflow:
   - `Ping Test` button (no apply)
+  - optional `Ping All Configs` mode (checks full list, may be slower)
+  - counter near Ping Test button: `tested/total`
   - ping shown per row
   - timeout shown as `timeout`
 - List UX:

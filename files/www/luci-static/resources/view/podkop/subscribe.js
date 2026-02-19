@@ -233,6 +233,16 @@ function injectSubscribeStyles() {
       font-size: 12px;
       font-weight: 500;
     }
+    .podkop-subscribe-ping-counter {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 2px 8px;
+      background: var(--background-color-low, #e5e5e5);
+      border-radius: 10px;
+      font-size: 12px;
+      color: var(--text-color-high, inherit);
+      vertical-align: middle;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -1020,6 +1030,30 @@ function getCurrentProxyConfigType(section_id) {
     select = document.querySelector('select[name*="proxy_config_type"]');
   }
   return select ? select.value : null;
+}
+
+function getPingButtonElement(section_id) {
+  return (
+    document.getElementById("cbid.podkop." + section_id + ".subscribe_ping_now") ||
+    document.getElementById("widget.cbid.podkop." + section_id + ".subscribe_ping_now") ||
+    document.querySelector('button[id*="podkop.' + section_id + '.subscribe_ping_now"]') ||
+    document.querySelector('input[id*="podkop.' + section_id + '.subscribe_ping_now"]')
+  );
+}
+
+function setPingCounter(section_id, tested, total) {
+  var btn = getPingButtonElement(section_id);
+  if (!btn || !btn.parentNode) return;
+
+  var id = "podkop-subscribe-ping-counter-" + section_id;
+  var el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement("span");
+    el.id = id;
+    el.className = "podkop-subscribe-ping-counter";
+    btn.parentNode.insertBefore(el, btn.nextSibling);
+  }
+  el.textContent = String(tested || 0) + "/" + String(total || 0);
 }
 
 // Create loading indicator
@@ -2106,6 +2140,7 @@ function enhanceSectionWithSubscribe(section) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
       var finalResult = result || {};
       var effectiveMode = finalResult.mode || mode;
+      setPingCounter(section_id, finalResult.tested || finalResult.eligible || 0, finalResult.total || 0);
 
       if (effectiveMode === "outbound" && finalResult.best_url) {
         try {
@@ -2152,10 +2187,12 @@ function enhanceSectionWithSubscribe(section) {
       var mode = getCurrentProxyConfigType(section_id) || "url";
       var finalResult = result || {};
       var effectiveMode = finalResult.mode || mode;
+      setPingCounter(section_id, finalResult.tested || finalResult.eligible || 0, finalResult.total || 0);
       updateSectionPingCache(section_id, finalResult);
       refreshConfigListFromSources(section_id, effectiveMode, ev);
       ui.addNotification(null, E("p", {}, _("Ping test completed.")), "info");
     }).catch(function (err) {
+      setPingCounter(section_id, 0, 0);
       ui.addNotification(null, E("p", {}, _("Ping test failed: ") + err.message), "warning");
     });
 
@@ -2163,6 +2200,19 @@ function enhanceSectionWithSubscribe(section) {
   };
 
   // Fetch button for URL mode
+  o = section.option(
+    form.Flag,
+    "subscribe_ping_all",
+    _("Ping All Configs"),
+    _("If enabled, ping checks all configs from sources (may be slower on huge lists)")
+  );
+  o.depends("proxy_config_type", "url");
+  o.depends("proxy_config_type", "urltest");
+  o.depends("proxy_config_type", "selector");
+  o.depends("proxy_config_type", "outbound");
+  o.default = "0";
+  o.rmempty = false;
+
   o = section.option(
     form.Button,
     "subscribe_fetch",
