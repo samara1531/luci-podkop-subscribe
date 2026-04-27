@@ -18,7 +18,7 @@ echo "=========================================="
 # проверка podkop
 if ! apk info | grep -qE "^(podkop|luci-app-podkop)$"; then
   echo "Error: Podkop is not installed"
-  echo "Install first: apk add podkop"
+  echo "Install first: podkop"
   exit 1
 fi
 
