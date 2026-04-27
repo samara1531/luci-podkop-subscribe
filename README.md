@@ -4,26 +4,37 @@
 
 ## Требования
 
-- OpenWrt `25.12` с установленным `podkop` или `luci-app-podkop`
+- OpenWrt `24.10`-`25.12` с установленным `podkop` или `luci-app-podkop`
 - Для XHTTP/REALITY в runtime outbound нужен `sing-box-extended`
 
 Автоматический установщик `sing-box-extended`:
 
 https://github.com/EikeiDev/OpenWRT-sing-box-extended?tab=readme-ov-file
 
-## Быстрая установка
+## Быстрая установка wrt 24.10
 
 ```sh
-wget -O /tmp/podkop-subscribe-install.sh https://raw.githubusercontent.com/AlexeDark/luci-podkop-subscribe/main/install.sh
+wget -O /tmp/podkop-subscribe-install.sh https://raw.githubusercontent.com/samara1531/luci-podkop-subscribe/main/install.sh
+sh /tmp/podkop-subscribe-install.sh
+```
+## Быстрая установка wrt 25.12
+```sh
+wget -O /tmp/podkop-subscribe-install.sh https://raw.githubusercontent.com/samara1531/luci-podkop-subscribe/main/25.12-install.sh
 sh /tmp/podkop-subscribe-install.sh
 ```
 
-## Удаление
+## Удаление wrt 24.10
 
 ```sh
-wget -O /tmp/podkop-subscribe-uninstall.sh https://raw.githubusercontent.com/AlexeDark/luci-podkop-subscribe/main/uninstall.sh
+wget -O /tmp/podkop-subscribe-uninstall.sh https://raw.githubusercontent.com/samara1531/luci-podkop-subscribe/main/uninstall.sh
 sh /tmp/podkop-subscribe-uninstall.sh
 ```
+
+## Удаление wrt 25.12
+
+```sh
+wget -O /tmp/podkop-subscribe-uninstall.sh https://raw.githubusercontent.com/samara1531/luci-podkop-subscribe/main/25.12-uninstall.sh
+sh /tmp/podkop-subscribe-uninstall.sh
 
 ## Основные возможности
 
