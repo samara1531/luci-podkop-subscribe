@@ -4,8 +4,9 @@
 
 ## Требования
 
-- OpenWrt `24.10`-`25.12` с установленным `podkop` или `luci-app-podkop`
+- OpenWrt `24.10`-`25.12` с установленным `podkop` и `luci-app-podkop`
 - Для XHTTP/REALITY в runtime outbound нужен `sing-box-extended`
+- После установки обязательно почистите кеш браузера, что-б отобразились новые пункты в настройках.
 
 Автоматический установщик `sing-box-extended`:
 
