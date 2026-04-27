@@ -28,8 +28,13 @@ if ! command -v wget >/dev/null 2>&1; then
   apk add wget
 fi
 
-# директории
-install -d -m 755 \
+mkdir -p \
+  /www/cgi-bin \
+  /www/luci-static/resources/view/podkop \
+  /usr/share/rpcd/acl.d \
+  /usr/bin
+
+chmod 755 \
   /www/cgi-bin \
   /www/luci-static/resources/view/podkop \
   /usr/share/rpcd/acl.d \
