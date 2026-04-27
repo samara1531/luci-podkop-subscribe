@@ -82,7 +82,6 @@ wget -q -O /www/luci-static/resources/view/podkop/subscribe-loader.js \
   "${BASE_URL}/www/luci-static/resources/view/podkop/subscribe-loader.js" || true
 chmod 644 /www/luci-static/resources/view/podkop/subscribe-loader.js 2>/dev/null || true
 
-# ACL (обязательно для LuCI)
 fetch /usr/share/rpcd/acl.d/luci-app-podkop-subscribe.json \
       "${BASE_URL}/usr/share/rpcd/acl.d/luci-app-podkop-subscribe.json"
 
@@ -105,3 +104,13 @@ echo ""
 echo "=========================================="
 echo "Installed successfully"
 echo "=========================================="
+echo ""
+echo "For XHTTP/REALITY in Outbound mode install sing-box-extended:"
+echo "https://github.com/EikeiDev/OpenWRT-sing-box-extended?tab=readme-ov-file"
+echo ""
+echo "Auto-update scheduler installed:"
+echo "- Cron: every 5 minutes"
+echo "- Real interval, sources and block list are configured per section in LuCI"
+echo ""
+echo "Open LuCI: Services -> Podkop"
+echo ""
