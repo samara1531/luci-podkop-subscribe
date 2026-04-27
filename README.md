@@ -4,7 +4,7 @@
 
 ## Требования
 
-- OpenWrt с установленным `podkop` или `luci-app-podkop`
+- OpenWrt `25.12` с установленным `podkop` или `luci-app-podkop`
 - Для XHTTP/REALITY в runtime outbound нужен `sing-box-extended`
 
 Автоматический установщик `sing-box-extended`:
