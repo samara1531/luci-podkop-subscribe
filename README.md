@@ -35,6 +35,7 @@ sh /tmp/podkop-subscribe-uninstall.sh
 ```sh
 wget -O /tmp/podkop-subscribe-uninstall.sh https://raw.githubusercontent.com/samara1531/luci-podkop-subscribe/main/25.12-uninstall.sh
 sh /tmp/podkop-subscribe-uninstall.sh
+```
 
 ## Основные возможности
 
