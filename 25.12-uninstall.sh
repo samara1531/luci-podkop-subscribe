@@ -93,4 +93,6 @@ echo ""
 echo "=========================================="
 echo "Uninstallation finished"
 echo "=========================================="
-echo "Ctrl+F5 in LuCI"
+echo "Please clear browser cache (Ctrl+F5)."
+
+
