@@ -15,11 +15,13 @@ https://github.com/EikeiDev/OpenWRT-sing-box-extended?tab=readme-ov-file
 ## Быстрая установка wrt 24.10
 
 ```sh
+rm -f /tmp/podkop-subscribe-install.sh
 wget -O /tmp/podkop-subscribe-install.sh https://raw.githubusercontent.com/samara1531/luci-podkop-subscribe/main/install.sh
 sh /tmp/podkop-subscribe-install.sh
 ```
 ## Быстрая установка wrt 25.12
 ```sh
+rm -f /tmp/podkop-subscribe-install.sh
 wget -O /tmp/podkop-subscribe-install.sh https://raw.githubusercontent.com/samara1531/luci-podkop-subscribe/main/25.12-install.sh
 sh /tmp/podkop-subscribe-install.sh
 ```
