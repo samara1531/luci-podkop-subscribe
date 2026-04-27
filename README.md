@@ -26,14 +26,7 @@ wget -O /tmp/podkop-subscribe-install.sh https://raw.githubusercontent.com/samar
 sh /tmp/podkop-subscribe-install.sh
 ```
 
-## Удаление wrt 24.10
-
-```sh
-wget -O /tmp/podkop-subscribe-uninstall.sh https://raw.githubusercontent.com/samara1531/luci-podkop-subscribe/main/uninstall.sh
-sh /tmp/podkop-subscribe-uninstall.sh
-```
-
-## Удаление wrt 25.12
+## Удаление wrt 24.10-25.12
 
 ```sh
 wget -O /tmp/podkop-subscribe-uninstall.sh https://raw.githubusercontent.com/samara1531/luci-podkop-subscribe/main/25.12-uninstall.sh
